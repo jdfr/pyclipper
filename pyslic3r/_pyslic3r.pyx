@@ -39,19 +39,20 @@ cdef class SlicedModel:
 
   def __dealloc__(self):
     del self.thisptr
-  
-  @cython.boundscheck(False)  
-  cdef vector[Polygons] * triangulateLayer(self, unsigned int nlayer):
-    """generate a model of a layer apt to be represented in a 3D view"""
-    cdef int k, num
-    cdef vector[Polygons] * pols = new vector[Polygons]()
-    if nlayer>=self.thisptr.size():
-      raise ValueError('incorrect layer ID')
-    num = self.thisptr[0][nlayer].size()
-    pols[0].resize(num)
-    for k in range(num):
-      self.thisptr[0][nlayer][k].triangulate_pp(&pols[0][k])
-    return pols
+
+#VERSION OF triangulateAllLayers for just one layer
+#  @cython.boundscheck(False)  
+#  cdef vector[Polygons] * triangulateLayer(self, unsigned int nlayer):
+#    """generate a model of a layer apt to be represented in a 3D view"""
+#    cdef int k, num
+#    cdef vector[Polygons] * pols = new vector[Polygons]()
+#    if nlayer>=self.thisptr.size():
+#      raise ValueError('incorrect layer ID')
+#    num = self.thisptr[0][nlayer].size()
+#    pols[0].resize(num)
+#    for k in range(num):
+#      self.thisptr[0][nlayer][k].triangulate_pp(&pols[0][k])
+#    return pols
   
   @cython.boundscheck(False)  
   cdef vector[vector[Polygons]] * triangulateAllLayers(self):
@@ -80,25 +81,28 @@ cdef class SlicedModel:
     kp = 0
     #kt = 0
     polss = self.triangulateAllLayers()
-    numP, numV = countPolygons(polss)
-    points    = np.empty((numV, 3), dtype=np.float64)
-    #triangles = np.empty((numP, 3), dtype=np.int64)
-    triangles = np.arange(numV).reshape((-1, 3))
-    for k1 in range(polss[0].size()):
-      z = zvalues[k1]
-      for k2 in range(polss[0][k1].size()):
-        for k3 in range(polss[0][k1][k2].size()):
-          polpoints = &polss[0][k1][k2][k3].points
-          if polpoints[0].size()!=3:
-            return (False, "Invalid triangulation!")
-          for k4 in range(3):
-            points[kp, 0]    = polpoints[0][k4].x*SCALING_FACTOR
-            points[kp, 1]    = polpoints[0][k4].y*SCALING_FACTOR
-            points[kp, 2]    = z
-            #triangles[kt,k4] = kp
-            kp += 1
-          #kt += 1
-    return (True, (points, triangles))
+    try:
+      numP, numV = countPolygons(polss)
+      points    = np.empty((numV, 3), dtype=np.float64)
+      #triangles = np.empty((numP, 3), dtype=np.int64)
+      triangles = np.arange(numV).reshape((-1, 3))
+      for k1 in range(polss[0].size()):
+        z = zvalues[k1]
+        for k2 in range(polss[0][k1].size()):
+          for k3 in range(polss[0][k1][k2].size()):
+            polpoints = &polss[0][k1][k2][k3].points
+            if polpoints[0].size()!=3:
+              return (False, "Invalid triangulation!")
+            for k4 in range(3):
+              points[kp, 0]    = polpoints[0][k4].x*SCALING_FACTOR
+              points[kp, 1]    = polpoints[0][k4].y*SCALING_FACTOR
+              points[kp, 2]    = z
+              #triangles[kt,k4] = kp
+              kp += 1
+            #kt += 1
+      return (True, (points, triangles))
+    finally:
+      del polss
 
   @cython.boundscheck(False)
   def layersAsTriangleMesh(self):
@@ -255,36 +259,38 @@ Generated using pyslic3r pre-alpha
     if nExpolygon>=self.thisptr[0][nlayer].size():
       raise ValueError('incorrect Expolygon ID')
     return self.thisptr[0][nlayer][nExpolygon].holes.size()
-  
-  @cython.boundscheck(False)  
-  def countVertsAndPols(self):
-    """count the number of vertices and polygons (both contours and holes) in all layers"""
-    cdef unsigned int numV = 0
-    cdef unsigned int numP = 0
-    cdef unsigned int k1, k2, k3, v2, v3
-    for k1 in range(self.thisptr[0].size()):
-      v2 = self.thisptr[0][k1].size()
-      numP += v2
-      for k2 in range(v2):
-        v3 = self.thisptr[0][k1][k2].holes.size()
-        numP += v3
-        numV += self.thisptr[0][k1][k2].contour.points.size()
-        for k3 in range(v3):
-          numV += self.thisptr[0][k1][k2].holes[k3].points.size()
-    return (numV, numP)
-    
-  @cython.boundscheck(False)  
-  def layerExPolygons(self, unsigned int nlayer, bool asInteger=False):
-    """return a generator for all expolygons in a layer. Each ExPolygon is returned as a tuple
-    with an expolygon index (within the layer), a contour and a list of holes"""
-    cdef unsigned int k
-    cdef cnp.ndarray contour
-    if nlayer>=self.thisptr[0].size():
-      raise ValueError('incorrect layer ID')
-    for k in xrange(self.thisptr[0][nlayer].size()):
-      contour = self._contour(nlayer, k, asInteger)
-      holes = [self._hole(nlayer, k, h, asInteger) for h in xrange(self.thisptr[0][nlayer][k].holes.size())]
-      yield (contour, holes)
+
+#VERSION OF COUNTPOLYGONS FOR thisptr  
+#  @cython.boundscheck(False)  
+#  def countVertsAndPols(self):
+#    """count the number of vertices and polygons (both contours and holes) in all layers"""
+#    cdef unsigned int numV = 0
+#    cdef unsigned int numP = 0
+#    cdef unsigned int k1, k2, k3, v2, v3
+#    for k1 in range(self.thisptr[0].size()):
+#      v2 = self.thisptr[0][k1].size()
+#      numP += v2
+#      for k2 in range(v2):
+#        v3 = self.thisptr[0][k1][k2].holes.size()
+#        numP += v3
+#        numV += self.thisptr[0][k1][k2].contour.points.size()
+#        for k3 in range(v3):
+#          numV += self.thisptr[0][k1][k2].holes[k3].points.size()
+#    return (numV, numP)
+
+#VERSION OF allExPolygons FOR JUST ONE LAYER
+#  @cython.boundscheck(False)  
+#  def layerExPolygons(self, unsigned int nlayer, bool asInteger=False):
+#    """return a generator for all expolygons in a layer. Each ExPolygon is returned as a tuple
+#    with an expolygon index (within the layer), a contour and a list of holes"""
+#    cdef unsigned int k
+#    cdef cnp.ndarray contour
+#    if nlayer>=self.thisptr[0].size():
+#      raise ValueError('incorrect layer ID')
+#    for k in xrange(self.thisptr[0][nlayer].size()):
+#      contour = self._contour(nlayer, k, asInteger)
+#      holes = [self._hole(nlayer, k, h, asInteger) for h in xrange(self.thisptr[0][nlayer][k].holes.size())]
+#      yield (contour, holes)
       
   @cython.boundscheck(False)
   def allExPolygons(self, bool asInteger=False):
@@ -350,6 +356,18 @@ cdef tuple countPolygons(vector[vector[Polygons]] * polss):
         numV += polss[0][k1][k2][k3].points.size()
   return (numP, numV)
 
+
+def doTest(SlicedModel sliced):
+  cdef vector[ExPolygons] *otro
+  
+  otro = new vector[ExPolygons]()
+  otro[0] = sliced.thisptr[0]
+  print otro[0][0][0].contour.points[0].x
+  print sliced.thisptr[0][0][0].contour.points[0].x
+  otro[0][0][0].contour.points[0].x = 350
+  print otro[0][0][0].contour.points[0].x
+  print sliced.thisptr[0][0][0].contour.points[0].x
+  del otro
   
 cdef class SlicerMesh:
   """class to represent a STL mesh and slice it"""

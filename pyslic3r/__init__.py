@@ -15,6 +15,6 @@
 
 # XXX do a more specific import!
 from ._pyslic3r import *
-import plot
+#import plot
 
 
