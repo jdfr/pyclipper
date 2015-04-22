@@ -18,42 +18,88 @@
 
 from libcpp.vector cimport vector
 #from libcpp.string cimport string
-#from libcpp cimport bool
+from libcpp cimport bool
 
+cdef extern from "libslic3r/libslic3r.h" nogil:
+  ctypedef long coord_t
+  ctypedef double coordf_t
+  cdef double SCALING_FACTOR
+  cdef double unscale(coord_t)
+  cdef double scale(double)
+  
+  
+cdef extern from "libslic3r/Point.hpp" namespace "Slic3r" nogil:
+  cdef cppclass Point:
+    coord_t x
+    coord_t y
+  ctypedef vector[Point] Points
+
+cdef extern from "libslic3r/MultiPoint.hpp" namespace "Slic3r" nogil:
+  cdef cppclass MultiPoint:
+    Points points
+
+cdef extern from "libslic3r/Polygon.hpp" namespace "Slic3r" nogil:
+  cdef cppclass Polygon
+  ctypedef vector[Polygon] Polygons
+  cdef cppclass Polygon(MultiPoint):
+    double area() const
+    bool is_counter_clockwise() const
+    bool is_clockwise() const
+    bool make_counter_clockwise()
+    bool make_clockwise()
+    bool is_valid() const
+    bool contains(const Point &point) const
+    Polygons simplify(double tolerance) const
+    void simplify(double tolerance, Polygons &polygons) const
+
+cdef extern from "libslic3r/ExPolygon.hpp" namespace "Slic3r" nogil:
+  cdef cppclass ExPolygon
+  ctypedef vector[ExPolygon] ExPolygons
+  cdef cppclass ExPolygon:
+    Polygon contour
+    Polygons holes
+    double area() const
+    bool is_valid() const
+    bool contains(const Point &point) const
+    bool has_boundary_point(const Point &point) const
+    Polygons simplify_p(double tolerance) const
+    ExPolygons simplify(double tolerance) const
+    void simplify(double tolerance, ExPolygons &expolygons) const
+    #void medial_axis(double max_width, double min_width, Polylines* polylines) const
+    void triangulate(Polygons* polygons) const
+    void triangulate_pp(Polygons* polygons) const
+    void triangulate_p2t(Polygons* polygons) const
 
 cdef extern from "libslic3r/TriangleMesh.hpp" namespace "Slic3r" nogil:
-    cdef cppclass TriangleMesh:
-        TriangleMesh() except +
-        void ReadSTLFile(char* input_file) except +
-        void write_ascii(char* output_file) except +
-        void write_binary(char* output_file) except +
-        void repair() except +
-        void WriteOBJFile(char* output_file) except +
-        void scale(float factor)
-        #void scale(const Pointf3 &versor);
-        void translate(float x, float y, float z)
-        void rotate_x(float angle)
-        void rotate_y(float angle)
-        void rotate_z(float angle)
-        void flip_x()
-        void flip_y()
-        void flip_z()
-        void align_to_origin()
-        #void rotate(double angle, Point* center);
-        #TriangleMeshPtrs split() const;
-        #void merge(const TriangleMesh &mesh);
+  cdef cppclass TriangleMesh:
+    TriangleMesh() except +
+    void ReadSTLFile(char* input_file) except +
+    void write_ascii(char* output_file) except +
+    void write_binary(char* output_file) except +
+    void repair() except +
+    void WriteOBJFile(char* output_file) except +
+    void scale(float factor)
+    #void scale(const Pointf3 &versor);
+    void translate(float x, float y, float z)
+    void rotate_x(float angle)
+    void rotate_y(float angle)
+    void rotate_z(float angle)
+    void flip_x()
+    void flip_y()
+    void flip_z()
+    void align_to_origin()
+    #void rotate(double angle, Point* center);
+    #TriangleMeshPtrs split() const;
+    #void merge(const TriangleMesh &mesh);
         
-#    cdef enum FacetEdgeType: feNone, feTop, feBottom, feHorizontal
-#
-#    cdef cppclass IntersectionLine
-#    
-#    cdef cppclass TriangleMeshSlicer:
-#        TriangleMesh* mesh
-#        TriangleMeshSlicer(TriangleMesh* _mesh) except +
-#        void slice(vector[float] &z, vector[Polygons]* layers)
-#        void slice(vector[float] &z, vector[ExPolygons]* layers)
-#        #void slice_facet(float slice_z, const stl_facet &facet, const int &facet_idx, const float &min_z, const float &max_z, std::vector<IntersectionLine>* lines) const;
-#        #void cut(float z, TriangleMesh* upper, TriangleMesh* lower);
+    
+  cdef cppclass TriangleMeshSlicer:
+    TriangleMesh* mesh
+    TriangleMeshSlicer(TriangleMesh* _mesh) except +
+    void slice(vector[float] &z, vector[Polygons]* layers) except +
+    void slice(vector[float] &z, vector[ExPolygons]* layers) except +
+    #void slice_facet(float slice_z, const stl_facet &facet, const int &facet_idx, const float &min_z, const float &max_z, std::vector<IntersectionLine>* lines) const;
+    #void cut(float z, TriangleMesh* upper, TriangleMesh* lower);
     
     
     

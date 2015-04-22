@@ -1,2 +1,3 @@
 build
-pyslic3r.cpp
+_pyslic3r.cpp
+test.py

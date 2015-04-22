@@ -1,3 +1,6 @@
 *.so
 *.o
+*.a
+*.pyc
 *.kate-swp
+README.md.html

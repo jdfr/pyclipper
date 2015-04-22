@@ -27,12 +27,15 @@ SET(CMAKE_BUILD_TYPE "Release" CACHE STRING "Release type")
 
 ADD_DEFINITIONS(-fPIC)
 
+#set (DODEBUG "-DSLIC3R_DEBUG")
+set (DODEBUG "")
+
 #add compiler flags from Slicer/xs/Build.PL (HAS_BOOL and SLIC3RXS
 #are specific to the perl build, so they are not included here)
 # _GLIBCXX_USE_C99 : to get the long long type for g++
 # HAS_BOOL         : stops Perl/lib/CORE/handy.h from doing "#  define bool char" for MSVC
 # NOGDI            : prevents inclusion of wingdi.h which defines functions Polygon() and Polyline() in global namespace
-set (SLIC3RFLAGS "-D_GLIBCXX_USE_C99 -DNOGDI")
+set (SLIC3RFLAGS "-D_GLIBCXX_USE_C99 -DNOGDI ${DODEBUG}")
 
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC ${SLIC3RFLAGS}")
 set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")

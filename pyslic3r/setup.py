@@ -29,13 +29,14 @@ from Cython.Distutils import build_ext
 import os
 from distutils.sysconfig import get_config_vars
 
-#disable that horribly annoying "-Wstrict-prototypes" warning
+#disable these horribly annoying warnings
 (opt,) = get_config_vars('OPT')
+opt += ' -Wno-unused-local-typedefs'
 os.environ['OPT'] = " ".join(
     flag for flag in opt.split() if flag != '-Wstrict-prototypes'
 )
 
-pyname = "pyslic3r"
+pyname = "_pyslic3r"
 
 # clean previous build
 for root, dirs, files in os.walk(".", topdown=False):
@@ -49,6 +50,8 @@ for root, dirs, files in os.walk(".", topdown=False):
 incp = "-I../deps/Slic3r/Slic3r/xs/src/"
 incs = [incp+x for x in ("", "admesh/", "boost/", "poly2tri/", "libscli3r/")]
 
+cflags = []
+
 # build "pyslic3r.so" python extension to be added to "PYTHONPATH" afterwards...
 setup(
     cmdclass = {'build_ext': build_ext},
@@ -60,7 +63,7 @@ setup(
                        ],
                   #libraries=["slic3rlib"],          # to link dynamically: refers to "libslic3rlib.so"
                   language="c++",                   # remove this if C and not C++
-                  extra_compile_args=incs,#+["-fopenmp", "-O3"],
+                  extra_compile_args=incs+cflags,#+["-fopenmp", "-O3"],
                   extra_objects=["../deps/Slic3r/Slic3r-build/libslic3rlib.a"], #to link statically
                   extra_link_args=[#"-L./", #to link dynamically: path to "libslic3rlib.so"
                                    #"-DSOME_DEFINE_OPT", 
