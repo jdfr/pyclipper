@@ -1,22 +1,18 @@
 # pyslic3r
 
-pyslic3r is a testbed for a python library exposing slic3r's core C++ codebase.
+pyslic3r is a testbed for an experimental python slicing library using slic3r's core C++ codebase.
+
+Because Slic3r is designed as a full-fledged slicing solution, its library has a relatively involved data model, with many C++ classes representing many different slicing concepts and abstractions. In its current form, pyslic3r does not attempt to expose all of slic3r's architecture, but just the most basic bits of it, in order to slice STL files. From a technical point of view, we are just wrapping two kinds of objects:
+
+* `SlicerMesh` wraps `Slic3r::TriangleMesh`
+
+* `SlicedModel` wraps `std::vector<ExPolygons>`, which is the result of `Slic3r::TriangleMeshSlicer::slice`
+
+Some operations on these objects are also wrapped.
 
 ## Rationale
 
-slic3r is one of the best open source slicers out there, and has a big, high-quality codebase. It deserves to be the point of reference for open source slicing, to test new ideas and add new features.
-
-But it has a quite big issue: perl.
-
-Please don't get me wrong: looking at slic3r's codebase, I can see how perl has great tools to seamlessly integrate a C++ codebase into a scripting language. In that regard, it was probably a good choice of language.
-
-But perl is dying. Casual developers migrated to other languages long ago, and it is becoming increasingly rare to find perl monks to maintain existing codebases.
-
-You only have to look at slic3r: it is one of the flagship open source slicers out there, with a massive user base. But slic3r's GitHub commit history shows us that almost all of the development effort is done by alexrj. With such a popular project, I would expect a large developer community. Again, don't get me wrong: alexrj is clearly up to the task.
-
-But I am not. I can read perl, but I am not at ease writing it - at all. As most other people, I really prefer python.
-
-As I intend to build on slic3r to test some new ideas in slicing, this is a problem for me. So I am starting this as a testbed for a python library exposing the core C++ slic3r code. I only need a few bits of slic3r for my work, but hopefully it can be used as a framework to develop a full-fledged python library.
+slic3r is one of the best open source slicers out there, and has a big, high-quality codebase. Rather than adapt an already existing clipping library to do slicing in python, pyslic3r builds upon alexrj's excellent work in the C++ core of slic3r.
 
 # Compiling
 

@@ -23,7 +23,64 @@ from slic3r_defs cimport *
 
 from libc.stdio cimport *
 
+#######################################################################
+########## TriangleMesh WRAPPER CLASS ##########
+#######################################################################
+
+
+cdef class SlicerMesh:
+  """class to represent a STL mesh and slice it"""
+  cdef sd.TriangleMesh *thisptr
+  
+  def __cinit__(self, filename):
+    self.thisptr = new sd.TriangleMesh()
+    self.thisptr.ReadSTLFile(filename)
+  def __dealloc__(self):
+    del self.thisptr
+  
+  def add(self, SlicerMesh other):
+    """add another mesh to this one. WARNING: no boolean operation is performed.
+    If the meshes intersect, unexpected errors will likely follow"""
+    self.thisptr[0].merge(other.thisptr[0])
+  
+  def save(self, basestring filename, basestring mode='stlb'):
+    model = mode.lower()
+    if mode=='stl':
+      mode = 'stlb'
+    if mode=='stlb':
+      self.thisptr[0].write_binary(filename)
+    elif mode=='stla':
+      self.thisptr[0].write_ascii(filename)
+    elif mode=='obj':
+      self.thisptr[0].WriteOBJFile(filename)
+    else:
+      raise Exception('mode not understood: '+mode)
+
+  @cython.boundscheck(False)
+  def doslice(self, cnp.ndarray[cnp.float32_t, ndim=1] zs):
+    """generate a sliced model of this mesh"""
+    cdef int k, k1, sz, sz1
+    cdef vector[float] zsv
+    #we cannot allocate the object in the stack because cython requires it to have a contructor without args
+    cdef TriangleMeshSlicer *slicer = new TriangleMeshSlicer(self.thisptr)
+    cdef SlicedModel layers = SlicedModel(zs.copy())
+    try:
+      sz = zs.size
+      zsv.resize(sz)
+      for k in range(sz):
+        zsv[k] = zs[k]
+      slicer.slice(zsv, layers.thisptr)
+      return layers
+    finally:
+      del slicer
+
+#######################################################################
+########## Sliced Model WRAPPER CLASS ##########
+#######################################################################
+
+
 cdef class SlicedModel:
+  """class to represent a sliced model"""
   cdef vector[ExPolygons] *thisptr
   cdef cnp.ndarray zvalues
   
@@ -40,197 +97,15 @@ cdef class SlicedModel:
   def __dealloc__(self):
     del self.thisptr
 
-#VERSION OF triangulateAllLayers for just one layer
-#  @cython.boundscheck(False)  
-#  cdef vector[Polygons] * triangulateLayer(self, unsigned int nlayer):
-#    """generate a model of a layer apt to be represented in a 3D view"""
-#    cdef int k, num
-#    cdef vector[Polygons] * pols = new vector[Polygons]()
-#    if nlayer>=self.thisptr.size():
-#      raise ValueError('incorrect layer ID')
-#    num = self.thisptr[0][nlayer].size()
-#    pols[0].resize(num)
-#    for k in range(num):
-#      self.thisptr[0][nlayer][k].triangulate_pp(&pols[0][k])
-#    return pols
-  
-  @cython.boundscheck(False)  
-  cdef vector[vector[Polygons]] * triangulateAllLayers(self):
-    """generate a model of the layers apt to be represented in a 3D view"""
-    cdef int k1, k2, nlayers, nexpols
-    cdef vector[vector[Polygons]] * polss = new vector[vector[Polygons]]()
-    nlayers = self.thisptr[0].size()
-    polss[0].resize(nlayers)
-    for k1 in range(nlayers):
-      nexpols = self.thisptr[0][k1].size()
-      polss[0][k1].resize(nexpols)
-      for k2 in range(nexpols):
-        self.thisptr[0][k1][k2].triangulate_pp(&polss[0][k1][k2])
-    return polss
-
-  @cython.boundscheck(False)
-  cdef tuple _layersAsTriangleMesh(self):
-    """return a generator returning triangles"""
-    cdef vector[vector[Polygons]] * polss
-    cdef Points * polpoints
-    cdef cnp.ndarray[cnp.float64_t, ndim=2] points
-    cdef cnp.ndarray[cnp.int64_t, ndim=2] triangles
-    cdef unsigned int k1, k2, k3, k4, kp#, kt
-    cdef cnp.ndarray[cnp.float32_t, ndim=1] zvalues = self.zvalues
-    cdef bool ok = True
-    kp = 0
-    #kt = 0
-    polss = self.triangulateAllLayers()
-    try:
-      numP, numV = countPolygons(polss)
-      points    = np.empty((numV, 3), dtype=np.float64)
-      #triangles = np.empty((numP, 3), dtype=np.int64)
-      triangles = np.arange(numV).reshape((-1, 3))
-      for k1 in range(polss[0].size()):
-        z = zvalues[k1]
-        for k2 in range(polss[0][k1].size()):
-          for k3 in range(polss[0][k1][k2].size()):
-            polpoints = &polss[0][k1][k2][k3].points
-            if polpoints[0].size()!=3:
-              return (False, "Invalid triangulation!")
-            for k4 in range(3):
-              points[kp, 0]    = polpoints[0][k4].x*SCALING_FACTOR
-              points[kp, 1]    = polpoints[0][k4].y*SCALING_FACTOR
-              points[kp, 2]    = z
-              #triangles[kt,k4] = kp
-              kp += 1
-            #kt += 1
-      return (True, (points, triangles))
-    finally:
-      del polss
-
-  @cython.boundscheck(False)
-  def layersAsTriangleMesh(self):
-    ret = self._layersAsTriangleMesh()
-    if ret[0]:
-      return ret[1]
+  def save(self, basestring filename, basestring mode='ply'):
+    model = mode.lower()
+    if mode=='ply':
+      writeAsPLY(self, filename)
+    elif mode=='svg':
+      writeAsSVG(self, filename)
     else:
-      raise Exception(ret[1])
-    
-    
-  
-  @cython.boundscheck(False)  
-  def writeAsSVG(self, filename):
-    """write a SVG file in the style of slic3r --export-svg"""
-    cdef unsigned int k1, k2, k3
-    cdef double z, cx, cy, dx, dy, sx, sy
-    cdef char space
-    cdef FILE *f = fopen(filename, "w")
-    cdef cnp.ndarray[cnp.float32_t, ndim=1] zvalues = self.zvalues
-    cx, cy, dx, dy = self.computeBBParams()
-    sx = cx-dx/2
-    sy = cy-dy/2
-    if f==NULL:
-      raise ValueError('Could not open the file in write mode')
-    try:
-      #header
-      fprintf(f, """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.0//EN" "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd">
-<svg width="%f" height="%f" xmlns="http://www.w3.org/2000/svg" xmlns:svg="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:slic3r="http://slic3r.org/namespaces/slic3r">
-<!-- 
-Generated using pyslic3r pre-alpha
- -->
-""", dx, dy)
-      #layers
-      for k1 in range(self.thisptr[0].size()):
-        z = zvalues[k1]
-        #layer prefix
-        fprintf(f, '  <g id="layer%d" slic3r:z="%f">\n', k1, z)
-        #expolygons
-        for k2 in range(self.thisptr[0][k1].size()):
-          #contour
-          writePolygonSVG(&self.thisptr[0][k1][k2].contour, f, True, sx, sy)
-          #holes
-          for k3 in range(self.thisptr[0][k1][k2].holes.size()):
-            writePolygonSVG(&self.thisptr[0][k1][k2].holes[k3], f, False, sx, sy)
-        #layer postfix
-        fputs('  </g>\n', f)
-      #close svg
-      fputs('</svg>', f)
-    finally:
-      fclose(f)
-            
-  @cython.boundscheck(False)
-  cdef tuple computeBBParams(self):  
-    """Compute some parameters of the bounding box: the center and the size"""
-    cdef unsigned int k1, k2, k3, k4
-    cdef double minx, maxx, miny, maxy, x, y, cx, cy, dx, dy
-    
-    minx = np.inf
-    miny = np.inf
-    maxx = -np.inf
-    maxy = -np.inf
-    for k1 in range(self.thisptr[0].size()):
-      for k2 in range(self.thisptr[0][k1].size()):
-        for k3 in range(self.thisptr[0][k1][k2].contour.points.size()):
-          x = self.thisptr[0][k1][k2].contour.points[k3].x
-          y = self.thisptr[0][k1][k2].contour.points[k3].y
-          minx = min(minx, x)
-          miny = min(miny, y)
-          maxx = max(maxx, x)
-          maxy = max(maxy, y)
-        for k3 in range(self.thisptr[0][k1][k2].holes.size()):
-          for k4 in range(self.thisptr[0][k1][k2].holes[k3].points.size()):
-            x = self.thisptr[0][k1][k2].holes[k3].points[k4].x
-            y = self.thisptr[0][k1][k2].holes[k3].points[k4].y
-            minx = min(minx, x)
-            miny = min(miny, y)
-            maxx = max(maxx, x)
-            maxy = max(maxy, y)
-    cx = (maxx+minx)/2*SCALING_FACTOR
-    cy = (maxy+miny)/2*SCALING_FACTOR
-    dx = (maxx-minx)*SCALING_FACTOR
-    dy = (maxy-miny)*SCALING_FACTOR
-    #return (minx, maxx, miny, maxy)
-    return (cx, cy, dx, dy)
-            
-    
-  
-  @cython.boundscheck(False)  
-  def writeAsPLY(self, filename):
-    """write a sliced model to a PLY file"""
-    cdef vector[vector[Polygons]] * polss
-    cdef unsigned int numV, numP, numpoints, basecount, k1, k2, k3, k4
-    cdef double z
-    cdef FILE *f
-    cdef unsigned int count = 0
-    cdef cnp.ndarray[cnp.float32_t, ndim=1] zvalues = self.zvalues
-    polss = self.triangulateAllLayers()
-    try:
-      numP, numV = countPolygons(polss)
-      f = fopen(filename, "w")
-      if f==NULL:
-        raise ValueError('Could not open the file in write mode')
-      try:
-        #header
-        fprintf(f, 'ply\nformat ascii 1.0\nelement vertex %d\nproperty float x\nproperty float y\nproperty float z\nelement face %d\nproperty list uchar int vertex_index\nend_header\n', numV, numP)
-        #points
-        for k1 in range(polss[0].size()):
-          z = zvalues[k1]
-          for k2 in range(polss[0][k1].size()):
-            for k3 in range(polss[0][k1][k2].size()):
-              for k4 in range(polss[0][k1][k2][k3].points.size()):
-                fprintf(f, '%f %f %f\n', polss[0][k1][k2][k3].points[k4].x*SCALING_FACTOR, polss[0][k1][k2][k3].points[k4].y*SCALING_FACTOR, z)
-        #polygons
-        for k1 in range(polss[0].size()):
-          for k2 in range(polss[0][k1].size()):
-            for k3 in range(polss[0][k1][k2].size()):
-              numpoints = polss[0][k1][k2][k3].points.size()
-              fprintf(f, '%d', numpoints)
-              for k4 in range(numpoints):
-                fprintf(f, ' %d', count+k4)
-              fputs('\n', f)
-              count += numpoints
-      finally:
-        fclose(f)
-    finally:
-      del polss
-
+      raise Exception('mode not understood: '+mode)
+      
   @cython.boundscheck(False)  
   def toList(self):
     """convert into a list, each element is a layer, represented as a list of
@@ -341,7 +216,45 @@ Generated using pyslic3r pre-alpha
     if nhole>=self.thisptr[0][nlayer][nExpolygon].holes.size():
       raise ValueError('incorrect hole ID')
     return self._hole(nlayer, nExpolygon, nhole, asInteger)
+
+  @cython.boundscheck(False)
+  def computeBBParams(self):  
+    """Compute some parameters of the bounding box: the center and the size"""
+    cdef unsigned int k1, k2, k3, k4
+    cdef double minx, maxx, miny, maxy, x, y, cx, cy, dx, dy
     
+    minx = np.inf
+    miny = np.inf
+    maxx = -np.inf
+    maxy = -np.inf
+    for k1 in range(self.thisptr[0].size()):
+      for k2 in range(self.thisptr[0][k1].size()):
+        for k3 in range(self.thisptr[0][k1][k2].contour.points.size()):
+          x = self.thisptr[0][k1][k2].contour.points[k3].x
+          y = self.thisptr[0][k1][k2].contour.points[k3].y
+          minx = min(minx, x)
+          miny = min(miny, y)
+          maxx = max(maxx, x)
+          maxy = max(maxy, y)
+        for k3 in range(self.thisptr[0][k1][k2].holes.size()):
+          for k4 in range(self.thisptr[0][k1][k2].holes[k3].points.size()):
+            x = self.thisptr[0][k1][k2].holes[k3].points[k4].x
+            y = self.thisptr[0][k1][k2].holes[k3].points[k4].y
+            minx = min(minx, x)
+            miny = min(miny, y)
+            maxx = max(maxx, x)
+            maxy = max(maxy, y)
+    cx = (maxx+minx)/2*SCALING_FACTOR
+    cy = (maxy+miny)/2*SCALING_FACTOR
+    dx = (maxx-minx)*SCALING_FACTOR
+    dy = (maxy-miny)*SCALING_FACTOR
+    #return (minx, maxx, miny, maxy)
+    return (cx, cy, dx, dy)
+
+
+#######################################################################
+########## TRIANGULATION OF SlicedModel ##########
+#######################################################################
 
 @cython.boundscheck(False)
 cdef tuple countPolygons(vector[vector[Polygons]] * polss):
@@ -357,45 +270,158 @@ cdef tuple countPolygons(vector[vector[Polygons]] * polss):
   return (numP, numV)
 
 
-def doTest(SlicedModel sliced):
-  cdef vector[ExPolygons] *otro
+##VERSION OF triangulateAllLayers for just one layer
+#@cython.boundscheck(False)  
+#cdef vector[Polygons] * triangulateLayer(SlicedModel model, unsigned int nlayer):
+#  """generate a model of a layer apt to be represented in a 3D view"""
+#  cdef int k, num
+#  cdef vector[Polygons] * pols = new vector[Polygons]()
+#  if nlayer>=model.thisptr.size():
+#    raise ValueError('incorrect layer ID')
+#  num = model.thisptr[0][nlayer].size()
+#  pols[0].resize(num)
+#  for k in range(num):
+#    model.thisptr[0][nlayer][k].triangulate_pp(&pols[0][k])
+#  return pols
   
-  otro = new vector[ExPolygons]()
-  otro[0] = sliced.thisptr[0]
-  print otro[0][0][0].contour.points[0].x
-  print sliced.thisptr[0][0][0].contour.points[0].x
-  otro[0][0][0].contour.points[0].x = 350
-  print otro[0][0][0].contour.points[0].x
-  print sliced.thisptr[0][0][0].contour.points[0].x
-  del otro
-  
-cdef class SlicerMesh:
-  """class to represent a STL mesh and slice it"""
-  cdef sd.TriangleMesh *thisptr
-  
-  def __cinit__(self, filename):
-    self.thisptr = new sd.TriangleMesh()
-    self.thisptr.ReadSTLFile(filename)
-  def __dealloc__(self):
-    del self.thisptr
+@cython.boundscheck(False)  
+cdef vector[vector[Polygons]] * triangulateAllLayers(SlicedModel model):
+  """generate a model of the layers apt to be represented in a 3D view"""
+  cdef int k1, k2, nlayers, nexpols
+  cdef vector[vector[Polygons]] * polss = new vector[vector[Polygons]]()
+  nlayers = model.thisptr[0].size()
+  polss[0].resize(nlayers)
+  for k1 in range(nlayers):
+    nexpols = model.thisptr[0][k1].size()
+    polss[0][k1].resize(nexpols)
+    for k2 in range(nexpols):
+      model.thisptr[0][k1][k2].triangulate_pp(&polss[0][k1][k2])
+  return polss
 
-  @cython.boundscheck(False)
-  def doslice(self, cnp.ndarray[cnp.float32_t, ndim=1] zs):
-    cdef int k, k1, sz, sz1
-    cdef vector[float] zsv
-    cdef TriangleMeshSlicer *slicer = new TriangleMeshSlicer(self.thisptr)
-    cdef SlicedModel layers = SlicedModel(zs.copy())
+@cython.boundscheck(False)
+def layersAsTriangleMesh(SlicedModel model):
+  """return an array of points and an array of triangles, STL style (i. e.,
+  the points are not reused for neighbouring triangles)"""
+  cdef vector[vector[Polygons]] * polss
+  cdef Points * polpoints
+  cdef cnp.ndarray[cnp.float64_t, ndim=2] points
+  cdef cnp.ndarray[cnp.int64_t, ndim=2] triangles
+  cdef unsigned int k1, k2, k3, k4, kp#, kt
+  cdef cnp.ndarray[cnp.float32_t, ndim=1] zvalues = model.zvalues
+  cdef bool ok = True
+  kp = 0
+  #kt = 0
+  polss = triangulateAllLayers(model)
+  try:
+    numP, numV = countPolygons(polss)
+    points    = np.empty((numV, 3), dtype=np.float64)
+    #triangles = np.empty((numP, 3), dtype=np.int64)
+    triangles = np.arange(numV).reshape((-1, 3))
+    for k1 in range(polss[0].size()):
+      z = zvalues[k1]
+      for k2 in range(polss[0][k1].size()):
+        for k3 in range(polss[0][k1][k2].size()):
+          polpoints = &polss[0][k1][k2][k3].points
+          if polpoints[0].size()!=3:
+            raise Exception("Invalid triangulation!")
+          for k4 in range(3):
+            points[kp, 0]    = polpoints[0][k4].x*SCALING_FACTOR
+            points[kp, 1]    = polpoints[0][k4].y*SCALING_FACTOR
+            points[kp, 2]    = z
+            #triangles[kt,k4] = kp
+            kp += 1
+          #kt += 1
+    return (True, (points, triangles))
+  finally:
+    del polss
+
+#######################################################################
+########## WRITING TO DISK SlicedModel ##########
+#######################################################################
+  
+@cython.boundscheck(False)  
+cdef void writeAsSVG(SlicedModel model, basestring filename):
+  """write a SVG file in the style of slic3r --export-svg"""
+  cdef unsigned int k1, k2, k3
+  cdef double z, cx, cy, dx, dy, sx, sy
+  cdef char space
+  cdef FILE *f = fopen(filename, "w")
+  cdef cnp.ndarray[cnp.float32_t, ndim=1] zvalues = model.zvalues
+  cx, cy, dx, dy = model.computeBBParams()
+  sx = cx-dx/2
+  sy = cy-dy/2
+  if f==NULL:
+    raise ValueError('Could not open the file in write mode')
+  try:
+    #header
+    fprintf(f, """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.0//EN" "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd">
+<svg width="%f" height="%f" xmlns="http://www.w3.org/2000/svg" xmlns:svg="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:slic3r="http://slic3r.org/namespaces/slic3r">
+<!-- 
+Generated using pyslic3r pre-alpha
+ -->
+""", dx, dy)
+    #layers
+    for k1 in range(model.thisptr[0].size()):
+      z = zvalues[k1]
+      #layer prefix
+      fprintf(f, '  <g id="layer%d" slic3r:z="%f">\n', k1, z)
+      #expolygons
+      for k2 in range(model.thisptr[0][k1].size()):
+        #contour
+        writePolygonSVG(&model.thisptr[0][k1][k2].contour, f, True, sx, sy)
+        #holes
+        for k3 in range(model.thisptr[0][k1][k2].holes.size()):
+          writePolygonSVG(&model.thisptr[0][k1][k2].holes[k3], f, False, sx, sy)
+      #layer postfix
+      fputs('  </g>\n', f)
+    #close svg
+    fputs('</svg>', f)
+  finally:
+    fclose(f)
+            
+            
+@cython.boundscheck(False)  
+cdef void writeAsPLY(SlicedModel model, basestring filename):
+  """write a sliced model to a PLY file"""
+  cdef vector[vector[Polygons]] * polss
+  cdef unsigned int numV, numP, numpoints, basecount, k1, k2, k3, k4
+  cdef double z
+  cdef FILE *f
+  cdef unsigned int count = 0
+  cdef cnp.ndarray[cnp.float32_t, ndim=1] zvalues = model.zvalues
+  polss = triangulateAllLayers(model)
+  try:
+    numP, numV = countPolygons(polss)
+    f = fopen(filename, "w")
+    if f==NULL:
+      raise ValueError('Could not open the file in write mode')
     try:
-      sz = zs.size
-      zsv.resize(sz)
-      for k in range(sz):
-        zsv[k] = zs[k]
-      slicer.slice(zsv, layers.thisptr)
-      return layers
+      #header
+      fprintf(f, 'ply\nformat ascii 1.0\nelement vertex %d\nproperty float x\nproperty float y\nproperty float z\nelement face %d\nproperty list uchar int vertex_index\nend_header\n', numV, numP)
+      #points
+      for k1 in range(polss[0].size()):
+        z = zvalues[k1]
+        for k2 in range(polss[0][k1].size()):
+          for k3 in range(polss[0][k1][k2].size()):
+            for k4 in range(polss[0][k1][k2][k3].points.size()):
+              fprintf(f, '%f %f %f\n', polss[0][k1][k2][k3].points[k4].x*SCALING_FACTOR, polss[0][k1][k2][k3].points[k4].y*SCALING_FACTOR, z)
+      #polygons
+      for k1 in range(polss[0].size()):
+        for k2 in range(polss[0][k1].size()):
+          for k3 in range(polss[0][k1][k2].size()):
+            numpoints = polss[0][k1][k2][k3].points.size()
+            fprintf(f, '%d', numpoints)
+            for k4 in range(numpoints):
+              fprintf(f, ' %d', count+k4)
+            fputs('\n', f)
+            count += numpoints
     finally:
-      del slicer
+      fclose(f)
+  finally:
+    del polss
 
-
+    
 @cython.boundscheck(False)
 cdef void writePolygonSVG(Polygon * pol, FILE * f, bool contour, double cx, double cy):
   """helper function to write a sliced model to a SVG file in the style of slic3r --export-svg"""
@@ -419,6 +445,12 @@ cdef void writePolygonSVG(Polygon * pol, FILE * f, bool contour, double cx, doub
   else:
     fputs('black', f)
   fputs('" />\n', f)
+
+
+#######################################################################
+########## TRANSLATING SlicedModel TO PYTHONIC STRUCTURE ##########
+#######################################################################
+
 
 @cython.boundscheck(False)
 cdef list layers2List(vector[ExPolygons] *layers):
@@ -477,8 +509,7 @@ cdef cnp.ndarray[dtype=cnp.float64_t, ndim=2] Polygon2arrayF(Polygon *pol):
     parr[k,0] = points[k].x
     parr[k,1] = points[k].y
   return parr
-  
-    
+
 
 #def stl2obj(basestring fin, basestring fout):
 #  cdef TriangleMesh mesh

@@ -79,7 +79,7 @@ cdef extern from "libslic3r/TriangleMesh.hpp" namespace "Slic3r" nogil:
     void repair() except +
     void WriteOBJFile(char* output_file) except +
     void scale(float factor)
-    #void scale(const Pointf3 &versor);
+    #void scale(const Pointf3 &versor)
     void translate(float x, float y, float z)
     void rotate_x(float angle)
     void rotate_y(float angle)
@@ -88,9 +88,9 @@ cdef extern from "libslic3r/TriangleMesh.hpp" namespace "Slic3r" nogil:
     void flip_y()
     void flip_z()
     void align_to_origin()
-    #void rotate(double angle, Point* center);
-    #TriangleMeshPtrs split() const;
-    #void merge(const TriangleMesh &mesh);
+    #void rotate(double angle, Point* center)
+    #TriangleMeshPtrs split() const
+    void merge(const TriangleMesh &mesh)
         
     
   cdef cppclass TriangleMeshSlicer:
@@ -98,8 +98,27 @@ cdef extern from "libslic3r/TriangleMesh.hpp" namespace "Slic3r" nogil:
     TriangleMeshSlicer(TriangleMesh* _mesh) except +
     void slice(vector[float] &z, vector[Polygons]* layers) except +
     void slice(vector[float] &z, vector[ExPolygons]* layers) except +
-    #void slice_facet(float slice_z, const stl_facet &facet, const int &facet_idx, const float &min_z, const float &max_z, std::vector<IntersectionLine>* lines) const;
-    #void cut(float z, TriangleMesh* upper, TriangleMesh* lower);
+    #void slice_facet(float slice_z, const stl_facet &facet, const int &facet_idx, const float &min_z, const float &max_z, std::vector<IntersectionLine>* lines) const
+    #void cut(float z, TriangleMesh* upper, TriangleMesh* lower)
     
+
+cdef extern from "clipper.hpp" namespace "ClipperLib" nogil:
+  cdef enum JoinType:
+    jtSquare, jtRound, jtMiter
     
-    
+cdef extern from "libslic3r/ClipperUtils.hpp" namespace "Slic3r" nogil:
+  #Let's start with the functions operating on ExPolygons, we will declare the others later if we need them  
+  
+#  void offset(const Polygons &polygons, ExPolygons* retval, const float delta)
+#  void offset(const Polygons &polygons, ExPolygons* retval, const float delta, double scale)
+#  void offset(const Polygons &polygons, ExPolygons* retval, const float delta, double scale, JoinType joinType)
+  void offset(const Polygons &polygons, ExPolygons* retval, const float delta, double scale, JoinType joinType, double miterLimit)
+
+#  void offset2(const Polygons &polygons, ExPolygons* retval, const float delta1, const float delta2)
+#  void offset2(const Polygons &polygons, ExPolygons* retval, const float delta1, const float delta2, double scale)
+#  void offset2(const Polygons &polygons, ExPolygons* retval, const float delta1, const float delta2, double scale, JoinType joinType)
+  void offset2(const Polygons &polygons, ExPolygons* retval, const float delta1, const float delta2, double scale, JoinType joinType, double miterLimit)
+
+#  void diff[SubjectType, ResultType](const SubjectType &subject, const ExPolygons &clip, ResultType* retval)
+  void diff[SubjectType, ResultType](const SubjectType &subject, const ExPolygons &clip, ResultType* retval, bool safety_offset_)
+
