@@ -18,27 +18,35 @@ import numpy as np
 cnp.import_array()
 
 
-cimport slic3r_defs as sd
 from slic3r_defs cimport *
 
 from libc.stdio cimport *
+
+from numpy.math cimport INFINITY#, NAN, isnan
+
+cdef extern from "math.h" nogil:
+  double fabs(double)
 
 #######################################################################
 ########## TriangleMesh WRAPPER CLASS ##########
 #######################################################################
 
+cdef double INV_SCALING_FACTOR = 1.0/SCALING_FACTOR
 
-cdef class SlicerMesh:
+scalingFactor    = SCALING_FACTOR
+invScalingFactor = INV_SCALING_FACTOR
+
+cdef class TriangleMesh:
   """class to represent a STL mesh and slice it"""
-  cdef sd.TriangleMesh *thisptr
+  cdef _TriangleMesh *thisptr
   
   def __cinit__(self, filename):
-    self.thisptr = new sd.TriangleMesh()
+    self.thisptr = new _TriangleMesh()
     self.thisptr.ReadSTLFile(filename)
   def __dealloc__(self):
     del self.thisptr
   
-  def add(self, SlicerMesh other):
+  def add(self, TriangleMesh other):
     """add another mesh to this one. WARNING: no boolean operation is performed.
     If the meshes intersect, unexpected errors will likely follow"""
     self.thisptr[0].merge(other.thisptr[0])
@@ -57,19 +65,20 @@ cdef class SlicerMesh:
       raise Exception('mode not understood: '+mode)
 
   @cython.boundscheck(False)
-  def doslice(self, cnp.ndarray[cnp.float32_t, ndim=1] zs):
+  def doslice(self, cnp.ndarray[cnp.float32_t, ndim=1] zs, double safety_offset=DEFAULT_SLICING_SAFETY_OFFSET):
     """generate a sliced model of this mesh"""
     cdef int k, k1, sz, sz1
     cdef vector[float] zsv
     #we cannot allocate the object in the stack because cython requires it to have a contructor without args
-    cdef TriangleMeshSlicer *slicer = new TriangleMeshSlicer(self.thisptr)
+    cdef TriangleMeshSlicer *slicer = new TriangleMeshSlicer(self.thisptr, DEFAULT_SLICING_SAFETY_OFFSET)
     cdef SlicedModel layers = SlicedModel(zs.copy())
     try:
       sz = zs.size
       zsv.resize(sz)
       for k in range(sz):
         zsv[k] = zs[k]
-      slicer.slice(zsv, layers.thisptr)
+      with nogil:
+        slicer.slice(zsv, layers.thisptr)
       return layers
     finally:
       del slicer
@@ -81,21 +90,52 @@ cdef class SlicerMesh:
 
 cdef class SlicedModel:
   """class to represent a sliced model"""
-  cdef vector[ExPolygons] *thisptr
+  cdef SLICEDMODEL *thisptr
   cdef cnp.ndarray zvalues
   
   property zvals:
+    """expose the z values to python"""
     def __get__(self):
       return self.zvalues
     def __set__(self, cnp.ndarray[cnp.float32_t, ndim=1] val):
       self.zvalues = val
+
   
-  def __cinit__(self, cnp.ndarray[cnp.float32_t, ndim=1] zvalues):
-    self.thisptr = new vector[ExPolygons]()
+  def __cinit__(self, cnp.ndarray[cnp.float32_t, ndim=1] zvalues, bool doinit = True):
+    if doinit:
+      self.thisptr = new SLICEDMODEL()
     self.zvalues = zvalues
 
   def __dealloc__(self):
     del self.thisptr
+  
+  cdef bool slicesAreOrdered(self):
+    return (np.diff(self.zvalues)>=0).all()
+  
+  @cython.boundscheck(False)  
+  def select(self, cnp.ndarray[cnp.int64_t, ndim=1] selectedzs):
+    """given an array of layer indexes, returns a new SlicedModel with a copy of
+    those layers"""
+    cdef SlicedModel selected = SlicedModel(self.zvalues[selectedzs])
+    cdef bool ok = True
+    cdef unsigned int k, siz
+    siz = selectedzs.size
+    with nogil:
+      selected.thisptr[0].reserve(siz)
+      for k in range(siz):
+        if (selectedzs[k]>=0) and ((<unsigned int>selectedzs[k])<self.thisptr[0].size()):
+          selected.thisptr[0].push_back(self.thisptr[0][selectedzs[k]])
+        else:
+          ok = False
+          break
+    if not ok:
+      raise Exception('Invalid layer index')
+    return selected
+
+  def merge(self, SlicedModel other, double mergeTolerance = 0.0):
+    """merge data from this SlicedModel and another one into a new one.
+    Slices from each model are merged if their z values are within mergeTolerance."""
+    return mergeSlicedModels([self, other], mergeTolerance)
 
   def save(self, basestring filename, basestring mode='ply'):
     model = mode.lower()
@@ -175,7 +215,7 @@ cdef class SlicedModel:
     cdef double z
     cdef cnp.ndarray contour
     for k1 in xrange(self.thisptr[0].size()):
-      z = self.zvalues[k1] #using yield, we cannot use the 
+      z = self.zvalues[k1] #using yield, we cannot use a numpy array buffer declaration
       for k2 in xrange(self.thisptr[0][k1].size()):
         contour = self._contour(k1, k2, asInteger)
         holes = [self._hole(k1, k2, h, asInteger) for h in xrange(self.thisptr[0][k1][k2].holes.size())]
@@ -223,10 +263,8 @@ cdef class SlicedModel:
     cdef unsigned int k1, k2, k3, k4
     cdef double minx, maxx, miny, maxy, x, y, cx, cy, dx, dy
     
-    minx = np.inf
-    miny = np.inf
-    maxx = -np.inf
-    maxy = -np.inf
+    minx = miny =  INFINITY
+    maxx = maxy = -INFINITY
     for k1 in range(self.thisptr[0].size()):
       for k2 in range(self.thisptr[0][k1].size()):
         for k3 in range(self.thisptr[0][k1][k2].contour.points.size()):
@@ -251,6 +289,126 @@ cdef class SlicedModel:
     #return (minx, maxx, miny, maxy)
     return (cx, cy, dx, dy)
 
+
+#######################################################################
+########## MERGING SEVERAL SlicedModels TOGETHER ##########
+#######################################################################
+
+
+@cython.boundscheck(False)  
+def mergeSlicedModels(inputs, double mergeTolerance = 0.0):
+  """merge data from a list of SlicedModels into a new one.
+  Slices from each model are merged if their z values are within mergeTolerance.
+  
+  WARNING: may produce unexpected results if the distances between slices in
+  any of the SlicedModels is lowerthan the tolerance
+  
+  WARNING: no boolean operation is performed. If the slices intersect,
+  unexpected errors will likely follow"""
+  
+  #convert the input to a list
+  cdef unsigned int inew, nmodels, allsizes, reservesize, k, idxlowest, numToMerge
+  cdef bool goon
+  cdef double lowest, val
+  cdef cnp.ndarray[cnp.float32_t, ndim=1] newzs
+  cdef SLICEDMODEL *newptr = new SLICEDMODEL()
+  cdef vector[int] numlayerss, idxs
+  cdef vector[bool] ended, toMerge
+  cdef vector[float] currentzs
+  cdef vector[float*] zvaluess
+  cdef vector[SLICEDMODEL*] thisptrs
+  cdef SlicedModel model
+  
+  inputs = list(inputs)  
+  allsizes = 0
+  nmodels  = len(inputs)
+  numlayerss.resize(nmodels)
+  ended.resize(nmodels)
+  toMerge.resize(nmodels)
+  idxs.resize(nmodels)
+  currentzs.resize(nmodels)
+  zvaluess.resize(nmodels)
+  thisptrs.resize(nmodels)
+  
+  #initialization, sanity checks
+  for k in range(nmodels):
+    model         = inputs[k]
+    if not model.slicesAreOrdered():
+      raise Exception('model %d is not ordered!' % k)
+    zvaluess[k]   = <float*>model.zvalues.data
+    thisptrs[k]   = model.thisptr
+    numlayerss[k] = model.thisptr[0].size()
+    allsizes     += numlayerss[k]
+    idxs[k]       = 0
+    ended[k]      = numlayerss[k]==0
+
+  newptr[0].reserve(allsizes)
+  newzs     = np.empty((allsizes,), dtype=np.float32)
+  inew      = 0
+  #make sure that we start the main loop only if we are going to do some work
+  goon      = allsizes>0
+  
+  with nogil:
+    while goon:
+      
+      #FIND LOWEST CURRENT SLICE ACROSS MODELS
+      lowest    = INFINITY
+      idxlowest = -1
+      for k in range(nmodels):
+        if not ended[k]:
+          currentzs[k] = zvaluess[k][idxs[k]]
+          if currentzs[k] < lowest:
+            idxlowest = k
+            lowest = currentzs[k]
+      #assert idxlowest>=0
+      
+      #FIND SLICES WITHIN THE TOLERANCE OF THE CURRENT LOWEST, PREPARE TO MERGE THEM LATER
+      val = numToMerge = reservesize = 0
+      for k in range(nmodels):
+        #for some cythonic reason, I cannot assign the boolean expression directly to toMerge[k]
+        if (not ended[k]) and (fabs(currentzs[idxlowest]-currentzs[k])<=mergeTolerance):
+          toMerge[k] = True
+          numToMerge  += 1
+          val         += currentzs[k]
+          reservesize += thisptrs[k][0][idxs[k]].size()
+        else:
+          toMerge[k] = False
+      
+      if numToMerge==1: #no merging: just copy the lowest slice
+      
+        newptr[0].push_back(thisptrs[idxlowest][0][idxs[idxlowest]])
+        newzs[inew]         = lowest
+        inew               += 1
+        idxs[idxlowest]  += 1
+        ended[idxlowest]  = idxs[idxlowest]>=numlayerss[idxlowest]
+      
+      else: #merge the slices within tolerance
+        
+        newzs[inew] = val / numToMerge
+        newptr[0].resize(inew+1)
+        newptr[0][inew].reserve(reservesize)
+        for k in range(nmodels):
+          if toMerge[k]:
+            newptr[0][inew].insert(newptr[0][inew].end(),  thisptrs[k][0][idxs[k]].begin(),  thisptrs[k][0][idxs[k]].end())
+            idxs[k] += 1
+            ended[k] = idxs[k]>=numlayerss[k]
+        inew   += 1
+  
+      #termination condition: no more slices to add
+      goon      = False
+      for k in range(nmodels):
+        if not ended[k]:
+          goon = True
+          break
+        
+  #if any merge happened, remove empty space at the end of zvalues
+  if inew<newzs.size:
+    newzs = newzs[:inew]
+  
+  #create new SlicedModel
+  model = SlicedModel(newzs, False) #use doinit==False to avoid allocating an empty thisptr in the new object
+  model.thisptr = newptr
+  return model
 
 #######################################################################
 ########## TRIANGULATION OF SlicedModel ##########
@@ -331,7 +489,7 @@ def layersAsTriangleMesh(SlicedModel model):
             #triangles[kt,k4] = kp
             kp += 1
           #kt += 1
-    return (True, (points, triangles))
+    return (points, triangles)
   finally:
     del polss
 
@@ -397,25 +555,26 @@ cdef void writeAsPLY(SlicedModel model, basestring filename):
     if f==NULL:
       raise ValueError('Could not open the file in write mode')
     try:
-      #header
-      fprintf(f, 'ply\nformat ascii 1.0\nelement vertex %d\nproperty float x\nproperty float y\nproperty float z\nelement face %d\nproperty list uchar int vertex_index\nend_header\n', numV, numP)
-      #points
-      for k1 in range(polss[0].size()):
-        z = zvalues[k1]
-        for k2 in range(polss[0][k1].size()):
-          for k3 in range(polss[0][k1][k2].size()):
-            for k4 in range(polss[0][k1][k2][k3].points.size()):
-              fprintf(f, '%f %f %f\n', polss[0][k1][k2][k3].points[k4].x*SCALING_FACTOR, polss[0][k1][k2][k3].points[k4].y*SCALING_FACTOR, z)
-      #polygons
-      for k1 in range(polss[0].size()):
-        for k2 in range(polss[0][k1].size()):
-          for k3 in range(polss[0][k1][k2].size()):
-            numpoints = polss[0][k1][k2][k3].points.size()
-            fprintf(f, '%d', numpoints)
-            for k4 in range(numpoints):
-              fprintf(f, ' %d', count+k4)
-            fputs('\n', f)
-            count += numpoints
+      with nogil:
+        #header
+        fprintf(f, 'ply\nformat ascii 1.0\nelement vertex %d\nproperty float x\nproperty float y\nproperty float z\nelement face %d\nproperty list uchar int vertex_index\nend_header\n', numV, numP)
+        #points
+        for k1 in range(polss[0].size()):
+          z = zvalues[k1]
+          for k2 in range(polss[0][k1].size()):
+            for k3 in range(polss[0][k1][k2].size()):
+              for k4 in range(polss[0][k1][k2][k3].points.size()):
+                fprintf(f, '%f %f %f\n', polss[0][k1][k2][k3].points[k4].x*SCALING_FACTOR, polss[0][k1][k2][k3].points[k4].y*SCALING_FACTOR, z)
+        #polygons
+        for k1 in range(polss[0].size()):
+          for k2 in range(polss[0][k1].size()):
+            for k3 in range(polss[0][k1][k2].size()):
+              numpoints = polss[0][k1][k2][k3].points.size()
+              fprintf(f, '%d', numpoints)
+              for k4 in range(numpoints):
+                fprintf(f, ' %d', count+k4)
+              fputs('\n', f)
+              count += numpoints
     finally:
       fclose(f)
   finally:
@@ -423,7 +582,7 @@ cdef void writeAsPLY(SlicedModel model, basestring filename):
 
     
 @cython.boundscheck(False)
-cdef void writePolygonSVG(Polygon * pol, FILE * f, bool contour, double cx, double cy):
+cdef void writePolygonSVG(Polygon * pol, FILE * f, bool contour, double cx, double cy) nogil:
   """helper function to write a sliced model to a SVG file in the style of slic3r --export-svg"""
   cdef unsigned int k
   #contour prefix
@@ -453,7 +612,7 @@ cdef void writePolygonSVG(Polygon * pol, FILE * f, bool contour, double cx, doub
 
 
 @cython.boundscheck(False)
-cdef list layers2List(vector[ExPolygons] *layers):
+cdef list layers2List(SLICEDMODEL *layers):
   """helper function to transform a sliced model into a native Python structure"""
   cdef int sz = layers[0].size()
   cdef int k
@@ -493,6 +652,7 @@ cdef cnp.ndarray[dtype=cnp.int64_t, ndim=2] Polygon2arrayI(Polygon *pol):
   cdef int sz = points.size()
   cdef int k
   cdef cnp.ndarray[dtype=cnp.int64_t, ndim=2] parr = np.empty((sz, 2), dtype=np.int64)
+  #this may be wrapped with nogil, but it is probably not worth to do it so frequently
   for k in range(sz):
     parr[k,0] = points[k].x
     parr[k,1] = points[k].y
@@ -505,18 +665,9 @@ cdef cnp.ndarray[dtype=cnp.float64_t, ndim=2] Polygon2arrayF(Polygon *pol):
   cdef int sz = points.size()
   cdef int k
   cdef cnp.ndarray[dtype=cnp.float64_t, ndim=2] parr = np.empty((sz, 2), dtype=np.float64)
+  #this may be wrapped with nogil, but it is probably not worth to do it so frequently
   for k in range(sz):
     parr[k,0] = points[k].x
     parr[k,1] = points[k].y
   return parr
 
-
-#def stl2obj(basestring fin, basestring fout):
-#  cdef TriangleMesh mesh
-#  mesh.ReadSTLFile(fin)
-#  #mesh.WriteOBJFile(fout)
-#  mesh.write_binary(fout)
-
-
-#import pyslic3r as s
-#s.stl2obj("/home/josedavid/3dprint/software/slicers/multi/nested001.stl", "/home/josedavid/3dprint/software/slicers/multi/otro.stl")

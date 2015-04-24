@@ -70,9 +70,11 @@ cdef extern from "libslic3r/ExPolygon.hpp" namespace "Slic3r" nogil:
     void triangulate_pp(Polygons* polygons) const
     void triangulate_p2t(Polygons* polygons) const
 
+ctypedef vector[ExPolygons] SLICEDMODEL
+
 cdef extern from "libslic3r/TriangleMesh.hpp" namespace "Slic3r" nogil:
-  cdef cppclass TriangleMesh:
-    TriangleMesh() except +
+  cdef cppclass _TriangleMesh "Slic3r::TriangleMesh":
+    _TriangleMesh() except +
     void ReadSTLFile(char* input_file) except +
     void write_ascii(char* output_file) except +
     void write_binary(char* output_file) except +
@@ -90,35 +92,62 @@ cdef extern from "libslic3r/TriangleMesh.hpp" namespace "Slic3r" nogil:
     void align_to_origin()
     #void rotate(double angle, Point* center)
     #TriangleMeshPtrs split() const
-    void merge(const TriangleMesh &mesh)
+    void merge(const _TriangleMesh &mesh)
         
+  cdef double DEFAULT_SLICING_SAFETY_OFFSET "DEFAULT_SLICING_SAFETY_OFFSET"
     
   cdef cppclass TriangleMeshSlicer:
-    TriangleMesh* mesh
-    TriangleMeshSlicer(TriangleMesh* _mesh) except +
+    _TriangleMesh* mesh
+    TriangleMeshSlicer(_TriangleMesh* _mesh) except +
+    TriangleMeshSlicer(_TriangleMesh* _mesh, double safety_offset) except +
     void slice(vector[float] &z, vector[Polygons]* layers) except +
-    void slice(vector[float] &z, vector[ExPolygons]* layers) except +
+    void slice(vector[float] &z, SLICEDMODEL *layers) except +
     #void slice_facet(float slice_z, const stl_facet &facet, const int &facet_idx, const float &min_z, const float &max_z, std::vector<IntersectionLine>* lines) const
-    #void cut(float z, TriangleMesh* upper, TriangleMesh* lower)
+    #void cut(float z, _TriangleMesh* upper, _TriangleMesh* lower)
+    
     
 
 cdef extern from "clipper.hpp" namespace "ClipperLib" nogil:
+  
+  ctypedef signed long long cInt
+  
+  cdef struct IntPoint:
+    cInt X
+    cInt Y
+    
+  ctypedef vector[IntPoint] Path
+  ctypedef vector[Path] Paths
+  
   cdef enum JoinType:
     jtSquare, jtRound, jtMiter
     
 cdef extern from "libslic3r/ClipperUtils.hpp" namespace "Slic3r" nogil:
-  #Let's start with the functions operating on ExPolygons, we will declare the others later if we need them  
+#NOTE: MOST OF THE FUNCTIONS DECLARED HERE HAVE DEFAULT ARGUMENTS, WHICH HAPPEN
+#TO COINCIDE WITH THE DEFAULT ARGUMENTS DECLARED IN THE *.xsp PERL BINDINGS,
+#AT LEAST IN THE VERSION OF SLIC3R THAT WE ARE USING
+
+  void Slic3rMultiPoint_to_ClipperPath(const MultiPoint &inputt, Path* output)
+  void Slic3rMultiPoints_to_ClipperPaths[T](const T &inputt, Paths* output)
+  void ClipperPath_to_Slic3rMultiPoint[T](const Path &inputt, T* output, bool eraseOutput)
+  void ClipperPaths_to_Slic3rMultiPoints[T](const Paths &inputt, T* output, bool eraseOutput)
+  void ClipperPaths_to_Slic3rExPolygons(const Paths &input, ExPolygons* output, bool eraseOutput)
+  void Add_Slic3rExPolygon_to_ClipperPaths(const ExPolygon &inputt, Paths* output)
+  void Slic3rExPolygons_to_ClipperPaths(const ExPolygons &inputt, Paths* output)
   
-#  void offset(const Polygons &polygons, ExPolygons* retval, const float delta)
-#  void offset(const Polygons &polygons, ExPolygons* retval, const float delta, double scale)
-#  void offset(const Polygons &polygons, ExPolygons* retval, const float delta, double scale, JoinType joinType)
-  void offset(const Polygons &polygons, ExPolygons* retval, const float delta, double scale, JoinType joinType, double miterLimit)
+  void offset(const Polygons &polygons, ExPolygons* retval, const float delta) except + #version with implicit paramenters
+  void offset(const Polygons &polygons, ExPolygons* retval, const float delta, double scale, JoinType joinType, double miterLimit, bool eraseOutput) except + 
+  void offset(const Polygons &polygons,   Polygons* retval, const float delta) except + #version with implicit paramenters
+  void offset(const Polygons &polygons,   Polygons* retval, const float delta, double scale, JoinType joinType, double miterLimit, bool eraseOutput) except + 
 
-#  void offset2(const Polygons &polygons, ExPolygons* retval, const float delta1, const float delta2)
-#  void offset2(const Polygons &polygons, ExPolygons* retval, const float delta1, const float delta2, double scale)
-#  void offset2(const Polygons &polygons, ExPolygons* retval, const float delta1, const float delta2, double scale, JoinType joinType)
-  void offset2(const Polygons &polygons, ExPolygons* retval, const float delta1, const float delta2, double scale, JoinType joinType, double miterLimit)
+  void offset2(const ExPolygon  &polygons, ExPolygons* retval, const float delta1, const float delta2, double scale, JoinType joinType, double miterLimit, bool eraseOutput) except + 
+  void offset2(const ExPolygon  &polygons,   Polygons* retval, const float delta1, const float delta2, double scale, JoinType joinType, double miterLimit, bool eraseOutput) except + 
+#  void offset2(const ExPolygons &polygons, ExPolygons* retval, const float delta1, const float delta2, double scale, JoinType joinType, double miterLimit, bool eraseOutput) except + 
+#  void offset2(const   Polygons &polygons, ExPolygons* retval, const float delta1, const float delta2, double scale, JoinType joinType, double miterLimit, bool eraseOutput) except + 
+#  void offset2(const   Polygons &polygons,   Polygons* retval, const float delta1, const float delta2, double scale, JoinType joinType, double miterLimit, bool eraseOutput) except + 
 
-#  void diff[SubjectType, ResultType](const SubjectType &subject, const ExPolygons &clip, ResultType* retval)
-  void diff[SubjectType, ResultType](const SubjectType &subject, const ExPolygons &clip, ResultType* retval, bool safety_offset_)
+  void diff [SubjectType, ResultType](const SubjectType &subject, const ExPolygons &clip, ResultType* retval, bool safety_offset_, bool eraseOutput) except + 
+  void diff [SubjectType, ResultType](const SubjectType &subject, const   Polygons &clip, ResultType* retval, bool safety_offset_, bool eraseOutput) except + 
+  
+cdef extern from "glue.hpp" nogil:
+  void mydiff(const ExPolygons &subject, const Polygons &clip, ExPolygons* retval, bool safety_offset_, bool eraseOutput) except +  #version with implicit paramenters
 

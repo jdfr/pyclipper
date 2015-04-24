@@ -19,8 +19,7 @@ import matplotlib.pyplot as plt
 from matplotlib.path import Path
 from matplotlib.patches import PathPatch
 import mpl_toolkits.mplot3d as m3
-
-#import pyslic3r as p
+import _pyslic3r as p
 
 def expolygon2path(contour, holes):
   """helper function for slices2Patches"""
@@ -95,9 +94,20 @@ from mayavi import mlab
 
 def mayaplot(slicedmodel):
   """use mayavi to plot the sliced model"""
-  points, triangles = slicedmodel.layersAsTriangleMesh()
+  points, triangles = p.layersAsTriangleMesh(slicedmodel)
   
   mlab.triangular_mesh(points[:,0], points[:,1], points[:,2], triangles, representation='surface')
+  mlab.show()
+
+def mayaplot2(slicedmodel1, slicedmodel2, color1=(1,0,0), color2=(0,1,0)):
+  """use mayavi to plot the sliced model"""
+  points1, triangles1 = p.layersAsTriangleMesh(slicedmodel1)
+  points2, triangles2 = p.layersAsTriangleMesh(slicedmodel2)
+  
+  rep = 'surface'
+  
+  mlab.triangular_mesh(points1[:,0], points1[:,1], points1[:,2], triangles1, color=color1, representation=rep)
+  mlab.triangular_mesh(points2[:,0], points2[:,1], points2[:,2], triangles2, color=color2, representation=rep)
   mlab.show()
 
 

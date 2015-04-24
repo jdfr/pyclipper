@@ -57,10 +57,7 @@ setup(
     cmdclass = {'build_ext': build_ext},
     ext_modules = [
         Extension(pyname, 
-                  sources=[pyname+".pyx",
-                           #"SomeAdditionalCppClass1.cpp",
-                           #"SomeAdditionalCppClass2.cpp"
-                       ],
+                  sources=[pyname+".pyx"],
                   #libraries=["slic3rlib"],          # to link dynamically: refers to "libslic3rlib.so"
                   language="c++",                   # remove this if C and not C++
                   extra_compile_args=incs+cflags,#+["-fopenmp", "-O3"],
