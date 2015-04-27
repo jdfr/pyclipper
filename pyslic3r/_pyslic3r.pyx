@@ -9,17 +9,20 @@
 
 cimport cython
 from libcpp cimport bool
-from cpython cimport bool as boolp
 
+cimport numpy as cnp
+import numpy as np
 
-#np.import_array()
-cnp.import_array()
+import os.path as op
 
 from slic3r_defs cimport *
 
 from libc.stdio cimport *
 
 from numpy.math cimport INFINITY, NAN, isnan
+
+#np.import_array()
+cnp.import_array()
 
 cdef extern from "math.h" nogil:
   double fabs(double)
@@ -39,7 +42,12 @@ cdef class TriangleMesh:
   
   def __cinit__(self, filename):
     self.thisptr = new _TriangleMesh()
-    self.thisptr.ReadSTLFile(filename)
+    if not op.isfile(filename):
+      raise Exception('This file does not exist: '+filename)
+    try:
+      self.thisptr.ReadSTLFile(filename)
+    except:
+      raise Exception('Could not import the STL file '+filename)
   def __dealloc__(self):
     del self.thisptr
   
