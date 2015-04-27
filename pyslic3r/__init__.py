@@ -13,8 +13,20 @@
 # License along with this file. You may obtain a copy of the License at
 # http://www.gnu.org/licenses/agpl-3.0.txt
 
-# XXX do a more specific import!
-from ._pyslic3r import *
-#import plot
+#from ._pyslic3r import *
 
+#VERY UGLY HACK TO GET LD TO LINK TO './libslic3rlib.so' WITHOUT INSTALLING IT 
+def _dynamicLoadHack():
+  from ctypes import cdll
+  import os.path
+  cdll.LoadLibrary(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'libslic3rlib.so'))
+
+try:
+  from ._pyslic3r import *
+except ImportError:
+  #probably the linker cannot find libslicerlib.so because it is not installed.
+  #Trying a hack...
+  _dynamicLoadHack()
+  #trying again...
+  from ._pyslic3r import *
 
