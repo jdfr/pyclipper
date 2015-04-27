@@ -13,6 +13,8 @@
 # License along with this file. You may obtain a copy of the License at
 # http://www.gnu.org/licenses/agpl-3.0.txt
 
+import itertools as it
+
 import numpy as n
 
 import matplotlib.pyplot as plt
@@ -88,26 +90,68 @@ def showSlices3D(slicedmodel, f=None, zfactor=1.0, facecolor='#cccccc', edgecolo
   plt.show()
 
 
-
+def test():
+  from mayavi import mlab
+  import numpy as n
+  x=[1,2,n.nan,3,4]; y=[1,2,n.nan,3,4]; z=[1,2,n.nan,3,4]
+  mlab.plot3d(x,y,z)
+  mlab.show()
+  
+def test():
+  from mayavi import mlab
+  import numpy as n
+  x=[1,2,5,3,4]; y=[1,2,5,3,4]; z=[1,2,5,3,4]
+  mlab.plot3d(x,y,z)
+  mlab.show()
+  
 
 from mayavi import mlab
 
-def mayaplot(slicedmodel):
-  """use mayavi to plot the sliced model"""
-  points, triangles = p.layersAsTriangleMesh(slicedmodel)
-  
-  mlab.triangular_mesh(points[:,0], points[:,1], points[:,2], triangles, representation='surface')
-  mlab.show()
+def mayaplot(slicedmodel, cmap='autumn', linecol=(0,0,0), show=True):
+  """use mayavi to plot a sliced model"""
+  #plot surfaces
+  ps, triangles = p.layersAsTriangleMesh(slicedmodel)
+  mlab.triangular_mesh(ps[:,0], ps[:,1], ps[:,2], triangles, 
+                       colormap=cmap, representation='surface')
 
-def mayaplot2(slicedmodel1, slicedmodel2, color1=(1,0,0), color2=(0,1,0)):
+  #make a list of pairs (cycle, z), composed from both contours and holes with their respective z's
+  allcycles = list(it.chain.from_iterable( it.chain(((contour,z),), zip(holes, it.cycle((z,))))
+                                           for _,_,z,contour,holes in slicedmodel.allExPolygons()))
+  #get cycle sizes    
+  cyclessizes = list(cycle.shape[0] for cycle, z in allcycles)
+  #get cumulative starting index for each cycle
+  cyclestartidxs = n.roll(n.cumsum(cyclessizes), 1)
+  cyclestartidxs[0] = 0
+  #concatenate XY coords for all cycles
+  cyclesxy = n.vstack([cycle for cycle,_ in allcycles])
+  #size matrices for (a) concatenated z values and (b) line connections for all cycles
+  cyclesz  = n.empty((cyclesxy.shape[0],))
+  conns    = n.empty((cyclesxy.shape[0],2))
+  #iterate over each cycle's starting index, size, and z
+  for startidx, size, (_,z) in it.izip(cyclestartidxs, cyclessizes, allcycles):
+    cyclesz[startidx:startidx+size] = z       #set z for the current cycle
+    rang = n.arange(startidx, startidx+size)
+    conns[startidx:startidx+size,0] = rang    #set line connections for the current cycle
+    conns[startidx, 1] = rang[-1]
+    conns[startidx+1:startidx+size,1] = rang[:-1]
+  #put all the processed data into mayavi
+  src = mlab.pipeline.scalar_scatter(cyclesxy[:,0],cyclesxy[:,1],cyclesz)
+  src.mlab_source.dataset.lines = conns # Connect them
+  lines = mlab.pipeline.stripper(src) # The stripper filter cleans up connected lines
+  mlab.pipeline.surface(lines, color=linecol)#, line_width=1)#, opacity=.4) # Finally, display the set of lines
+  if show:
+    mlab.show()
+
+def mayaplotN(slicedmodels, colormaps=None, linecolors=None):
   """use mayavi to plot the sliced model"""
-  points1, triangles1 = p.layersAsTriangleMesh(slicedmodel1)
-  points2, triangles2 = p.layersAsTriangleMesh(slicedmodel2)
   
-  rep = 'surface'
+  if not colormaps:
+    colormaps = ['autumn', 'cool']
+  if not linecolors:
+    linecolors = [(0,0,0)]
   
-  mlab.triangular_mesh(points1[:,0], points1[:,1], points1[:,2], triangles1, color=color1, representation=rep)
-  mlab.triangular_mesh(points2[:,0], points2[:,1], points2[:,2], triangles2, color=color2, representation=rep)
+  for slicedmodel, cmap, linecol in it.izip(slicedmodels, it.cycle(colormaps), it.cycle(linecolors)):
+    mayaplot(slicedmodel, cmap, linecol, show=False)
   mlab.show()
 
 
