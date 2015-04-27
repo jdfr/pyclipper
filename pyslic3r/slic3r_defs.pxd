@@ -65,9 +65,9 @@ cdef extern from "libslic3r/Polygon.hpp" namespace "Slic3r" nogil:
     void simplify(double tolerance, Polygons &polygons) const
 
 cdef extern from "libslic3r/ExPolygon.hpp" namespace "Slic3r" nogil:
-  cdef cppclass ExPolygon
-  ctypedef vector[ExPolygon] ExPolygons
-  cdef cppclass ExPolygon:
+  cdef cppclass _ExPolygon "Slic3r::ExPolygon"
+  ctypedef vector[_ExPolygon] ExPolygons
+  cdef cppclass _ExPolygon "Slic3r::ExPolygon":
     Polygon contour
     Polygons holes
     double area() const
@@ -145,7 +145,7 @@ cdef extern from "libslic3r/ClipperUtils.hpp" namespace "Slic3r" nogil:
   void ClipperPath_to_Slic3rMultiPoint[T](const Path &inputt, T* output, bool eraseOutput)
   void ClipperPaths_to_Slic3rMultiPoints[T](const Paths &inputt, T* output, bool eraseOutput)
   void ClipperPaths_to_Slic3rExPolygons(const Paths &input, ExPolygons* output, bool eraseOutput)
-  void Add_Slic3rExPolygon_to_ClipperPaths(const ExPolygon &inputt, Paths* output)
+  void Add_Slic3rExPolygon_to_ClipperPaths(const _ExPolygon &inputt, Paths* output)
   void Slic3rExPolygons_to_ClipperPaths(const ExPolygons &inputt, Paths* output)
   
   void offset(const Polygons &polygons, ExPolygons* retval, const float delta) except + #version with implicit paramenters
@@ -153,8 +153,8 @@ cdef extern from "libslic3r/ClipperUtils.hpp" namespace "Slic3r" nogil:
   void offset(const Polygons &polygons,   Polygons* retval, const float delta) except + #version with implicit paramenters
   void offset(const Polygons &polygons,   Polygons* retval, const float delta, double scale, JoinType joinType, double miterLimit, bool eraseOutput) except + 
 
-  void offset2(const ExPolygon  &polygons, ExPolygons* retval, const float delta1, const float delta2, double scale, JoinType joinType, double miterLimit, bool eraseOutput) except + 
-  void offset2(const ExPolygon  &polygons,   Polygons* retval, const float delta1, const float delta2, double scale, JoinType joinType, double miterLimit, bool eraseOutput) except + 
+  void offset2(const _ExPolygon  &polygons, ExPolygons* retval, const float delta1, const float delta2, double scale, JoinType joinType, double miterLimit, bool eraseOutput) except + 
+  void offset2(const _ExPolygon  &polygons,   Polygons* retval, const float delta1, const float delta2, double scale, JoinType joinType, double miterLimit, bool eraseOutput) except + 
 #  void offset2(const ExPolygons &polygons, ExPolygons* retval, const float delta1, const float delta2, double scale, JoinType joinType, double miterLimit, bool eraseOutput) except + 
 #  void offset2(const   Polygons &polygons, ExPolygons* retval, const float delta1, const float delta2, double scale, JoinType joinType, double miterLimit, bool eraseOutput) except + 
 #  void offset2(const   Polygons &polygons,   Polygons* retval, const float delta1, const float delta2, double scale, JoinType joinType, double miterLimit, bool eraseOutput) except + 

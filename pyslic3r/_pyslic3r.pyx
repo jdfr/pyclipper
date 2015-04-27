@@ -11,12 +11,9 @@ cimport cython
 from libcpp cimport bool
 from cpython cimport bool as boolp
 
-cimport numpy as cnp
-import numpy as np
 
 #np.import_array()
 cnp.import_array()
-
 
 from slic3r_defs cimport *
 
@@ -92,24 +89,28 @@ cdef class TriangleMesh:
     self.thisptr[0].merge(other.thisptr[0])
   
   def save(self, basestring filename, basestring mode='stlb'):
+    cdef char *FILENAME = filename
     model = mode.lower()
     if mode=='stl':
       mode = 'stlb'
     if mode=='stlb':
-      self.thisptr[0].write_binary(filename)
+      with nogil:
+        self.thisptr[0].write_binary(FILENAME)
     elif mode=='stla':
-      self.thisptr[0].write_ascii(filename)
+      with nogil:
+        self.thisptr[0].write_ascii(FILENAME)
     elif mode=='obj':
-      self.thisptr[0].WriteOBJFile(filename)
+      with nogil:
+        self.thisptr[0].WriteOBJFile(FILENAME)
     else:
       raise Exception('mode not understood: '+mode)
 
   @cython.boundscheck(False)
-  cpdef cnp.ndarray[cnp.float32_t, ndim=2] slicePlanes(self, double value, double startshift=NAN, basestring mode='c'):
+  def slicePlanes(self, double value, basestring mode='c', double startshift=NAN):
     """Simple slicing, with the parameter "mode" specifying either 'constant' z steps, or a 'fixed' number of steps.
     if specified, the parameter startshift is the height of the first slice"""
     cdef cnp.ndarray[cnp.float32_t, ndim=2] bb = self.boundingBox()
-    cdef cnp.ndarray[cnp.float32_t, ndim=1] zs
+    cdef cnp.ndarray zs
     if mode[0]=='c': #'constant'
       if isnan(startshift):
         startshift = value
@@ -118,9 +119,10 @@ cdef class TriangleMesh:
         zs = zs[:-1]
     elif mode[0]=='f':#'fixed'
       if isnan(startshift):
-        zs = np.linspace(bb[2,0],bb[2,1], value+2, dtype=np.float32)[1:-1]
+        zs = np.linspace(bb[2,0],bb[2,1], value+2)[1:-1]
       else:
-        zs = np.linspace(bb[2,0]+startshift,bb[2,1], value, endpoint=False, dtype=np.float32)
+        zs = np.linspace(bb[2,0]+startshift,bb[2,1], value, endpoint=False)
+      zs = zs.astype(np.float32)
     else:
       raise ValueError('Invalid Slice Mode')
     return zs
@@ -148,11 +150,18 @@ cdef class TriangleMesh:
 ########## Sliced Model WRAPPER CLASS ##########
 #######################################################################
 
+def _rangecheck(int init, int end, int size):
+  if init<0:
+    raise ValueError('items for removal must be non-negative')
+  if init>=size:
+    raise ValueError('items for removal must be within the layer indexes')
+  if end<init:
+    raise ValueError('Invalid range')
+  if end>=size:
+    raise ValueError('last item for removal must be within the item indexes')
 
 cdef class SlicedModel:
-  """class to represent a sliced model"""
-  cdef SLICEDMODEL *thisptr
-  cdef cnp.ndarray zvalues
+  """wrapper for the Slic3r data structure for a list of sliced layers"""
   
   property zvals:
     """expose the z values to python"""
@@ -172,6 +181,49 @@ cdef class SlicedModel:
   
   cdef bool slicesAreOrdered(self):
     return (np.diff(self.zvalues)>=0).all()
+  
+  #nogil SHOULD BE ALLOWED IN THE DEFINITIONS OF THE _removeXXX methods, BUT
+  #WE CANNOT PUT IT BECAUSE OF A WEIRD CYTHON BUG (COMPILATION FAILS, COMPLAINING  
+  #IN THE ARGUMENT LIST OF .remove(): "Converting to Python object not allowed without gil"
+  
+  @cython.boundscheck(False)  
+  cdef void _removeLayers(self, unsigned int init, unsigned int end) nogil:
+    cdef vector[ExPolygons].iterator it = self.thisptr[0].begin()
+    self.thisptr[0].erase(it+init, it+end)
+    
+  @cython.boundscheck(False)  
+  def removeLayers(self, unsigned int init, unsigned int end):
+    """remove a range of layers"""
+    _rangecheck(init, end, self.thisptr[0].size())
+    self._remove(init, end)
+    
+  @cython.boundscheck(False)  
+  cdef void _removeExPolygons(self, unsigned int nlayer, unsigned int init, unsigned int end) nogil:
+    cdef vector[_ExPolygon].iterator it = self.thisptr[0][nlayer].begin()
+    self.thisptr[0][nlayer].erase(it+init, it+end)
+    
+  @cython.boundscheck(False)  
+  def removeExPolygons(self, unsigned int nlayer, unsigned int init, unsigned int end):
+    """in a layer, remove a range of ExPolygons"""
+    if nlayer>=self.thisptr[0].size():
+      raise ValueError('incorrect layer ID')
+    _rangecheck(init, end, self.thisptr[0][nlayer].size())
+    self._removeExPolygons(nlayer, init, end)
+    
+  @cython.boundscheck(False)  
+  cdef void _removeHoles(self, unsigned int nlayer, unsigned int nexp, unsigned int init, unsigned int end) nogil:
+    cdef vector[Polygon].iterator it = self.thisptr[0][nlayer][nexp].holes.begin()
+    self.thisptr[0][nlayer][nexp].holes.erase(it+init, it+end)
+    
+  @cython.boundscheck(False)  
+  def removeHoles(self, unsigned int nlayer, unsigned int nexp, unsigned int init, unsigned int end):
+    """in an expolygon within a layer, remove a range of holes"""
+    if nlayer>=self.thisptr[0].size():
+      raise ValueError('incorrect layer ID')
+    if nexp>=self.thisptr[0][nlayer].size():
+      raise ValueError('incorrect ExPolygon ID')
+    _rangecheck(init, end, self.thisptr[0][nlayer][nexp].holes.size())
+    self._removeExPolygons(nlayer, init, end)
   
   @cython.boundscheck(False)  
   def select(self, cnp.ndarray[cnp.int64_t, ndim=1] selectedzs):
@@ -195,7 +247,9 @@ cdef class SlicedModel:
 
   def merge(self, SlicedModel other, double mergeTolerance = 0.0):
     """merge data from this SlicedModel and another one into a new one.
-    Slices from each model are merged if their z values are within mergeTolerance."""
+    Slices from each model are merged if their z values are within mergeTolerance.
+    WARNING: no sanity checks are done. If the ExPolygons within mergeTolerance
+    interesect, the behaviour is undefined for further calls to the Slic3r C++ library."""
     return mergeSlicedModels([self, other], mergeTolerance)
 
   def save(self, basestring filename, basestring mode='ply'):
@@ -208,27 +262,43 @@ cdef class SlicedModel:
       raise Exception('mode not understood: '+mode)
       
   @cython.boundscheck(False)  
-  def toList(self):
-    """convert into a list, each element is a layer, represented as a list of
-    expolygons, where each expolygon is represented as a tuple (contour, holes),
-    where "contour" is an array representing a sequence of 2D points,
-    and "holes" is a list of arrays, each one representing a sequence of 2D points"""
-    return layers2List(self.thisptr)
+  def toLayerList(self, bool asInteger=False):
+    """return a full-fledged pythonic representation of this SlicedModel object.
+    
+    This representation is a list of Layer objects.
+    
+    Each Layer object has a z value and a list of ExPolygon objects.
+    
+    An ExPolygon object represents a contour with holes. No nesting is allowed,
+    i.e., there are no contours within the holes (however, nesting is implemented
+    in practice as a list of logically unrelated but geometrically nested ExPolygons).
+    
+    Each ExPolygons has a contour and a list of holes.
+    
+    Contours and holes are numpy arrays of 2d points, each one representing a
+    polygon."""
+    #return [Layer(z, ExPolygons2List(&layers[0][k])) for z,k in zip(self.zvalues,range(self.thisptr[0].size()))]
+    return [Layer(self.zvalues[nlayer],
+                  [ExPolygon(self._contour(nlayer, nexp, asInteger),
+                             [self._hole(nlayer, nexp, nhole, asInteger)
+                              for nhole in xrange(self.numHoles(nlayer, nexp))])
+                   for nexp in xrange(self.numExPolygons(nlayer))])
+            for nlayer in xrange(self.thisptr[0].size())]
     
   @cython.boundscheck(False)  
-  def numLayers(self):
+  cpdef unsigned int numLayers(self):
     """number of layers of the sliced model"""
     return self.thisptr[0].size()
   
   @cython.boundscheck(False)  
-  def numExPolygons(self, unsigned int nlayer):
+  cpdef unsigned int numExPolygons(self, unsigned int nlayer):
     """number of ExPolygons in a layer of the sliced model"""
     if nlayer>=self.thisptr.size():
       raise ValueError('incorrect layer ID')
     return self.thisptr[0][nlayer].size()
     
   @cython.boundscheck(False)  
-  def numHoles(self, unsigned int nlayer, unsigned int nExpolygon):
+  cpdef unsigned int numHoles(self, unsigned int nlayer, unsigned int nExpolygon):
     """number of holes in an ExPolygon of a layer of the sliced model"""
     if nlayer>=self.thisptr[0].size():
       raise ValueError('incorrect layer ID')
@@ -317,38 +387,6 @@ cdef class SlicedModel:
     if nhole>=self.thisptr[0][nlayer][nExpolygon].holes.size():
       raise ValueError('incorrect hole ID')
     return self._hole(nlayer, nExpolygon, nhole, asInteger)
-
-  @cython.boundscheck(False)
-  def computeBBParams(self):  
-    """Compute some parameters of the bounding box: the center and the size"""
-    cdef unsigned int k1, k2, k3, k4
-    cdef double minx, maxx, miny, maxy, x, y, cx, cy, dx, dy
-    
-    minx = miny =  INFINITY
-    maxx = maxy = -INFINITY
-    for k1 in range(self.thisptr[0].size()):
-      for k2 in range(self.thisptr[0][k1].size()):
-        for k3 in range(self.thisptr[0][k1][k2].contour.points.size()):
-          x = self.thisptr[0][k1][k2].contour.points[k3].x
-          y = self.thisptr[0][k1][k2].contour.points[k3].y
-          minx = min(minx, x)
-          miny = min(miny, y)
-          maxx = max(maxx, x)
-          maxy = max(maxy, y)
-        for k3 in range(self.thisptr[0][k1][k2].holes.size()):
-          for k4 in range(self.thisptr[0][k1][k2].holes[k3].points.size()):
-            x = self.thisptr[0][k1][k2].holes[k3].points[k4].x
-            y = self.thisptr[0][k1][k2].holes[k3].points[k4].y
-            minx = min(minx, x)
-            miny = min(miny, y)
-            maxx = max(maxx, x)
-            maxy = max(maxy, y)
-    cx = (maxx+minx)/2*SCALING_FACTOR
-    cy = (maxy+miny)/2*SCALING_FACTOR
-    dx = (maxx-minx)*SCALING_FACTOR
-    dy = (maxy-miny)*SCALING_FACTOR
-    #return (minx, maxx, miny, maxy)
-    return (cx, cy, dx, dy)
 
 
 #######################################################################
@@ -476,7 +514,7 @@ def mergeSlicedModels(inputs, double mergeTolerance = 0.0):
 #######################################################################
 
 @cython.boundscheck(False)
-cdef tuple countPolygons(vector[vector[Polygons]] * polss):
+cdef void countPolygons(vector[vector[Polygons]] * polss, unsigned int *rnumP, unsigned int *rnumV) nogil:
   """compute the number of vertices and polygons in a vector of vectors of vectors of type Polygon"""
   cdef unsigned int numV = 0
   cdef unsigned int numP = 0
@@ -486,7 +524,8 @@ cdef tuple countPolygons(vector[vector[Polygons]] * polss):
       for k3 in range(polss[0][k1][k2].size()):
         numP += 1
         numV += polss[0][k1][k2][k3].points.size()
-  return (numP, numV)
+  rnumP[0] = numP  
+  rnumV[0] = numV
 
 
 ##VERSION OF triangulateAllLayers for just one layer
@@ -504,7 +543,7 @@ cdef tuple countPolygons(vector[vector[Polygons]] * polss):
 #  return pols
   
 @cython.boundscheck(False)  
-cdef vector[vector[Polygons]] * triangulateAllLayers(SlicedModel model):
+cdef vector[vector[Polygons]] * triangulateAllLayers(SlicedModel model) nogil:
   """generate a model of the layers apt to be represented in a 3D view"""
   cdef int k1, k2, nlayers, nexpols
   cdef vector[vector[Polygons]] * polss = new vector[vector[Polygons]]()
@@ -525,14 +564,14 @@ def layersAsTriangleMesh(SlicedModel model):
   cdef Points * polpoints
   cdef cnp.ndarray[cnp.float64_t, ndim=2] points
   cdef cnp.ndarray[cnp.int64_t, ndim=2] triangles
-  cdef unsigned int k1, k2, k3, k4, kp#, kt
+  cdef unsigned int numP, numV, k1, k2, k3, k4, kp#, kt
   cdef cnp.ndarray[cnp.float32_t, ndim=1] zvalues = model.zvalues
   cdef bool ok = True
   kp = 0
   #kt = 0
   polss = triangulateAllLayers(model)
   try:
-    numP, numV = countPolygons(polss)
+    countPolygons(polss, &numP, &numV)
     points    = np.empty((numV, 3), dtype=np.float64)
     #triangles = np.empty((numP, 3), dtype=np.int64)
     triangles = np.arange(numV).reshape((-1, 3))
@@ -566,36 +605,37 @@ cdef void writeAsSVG(SlicedModel model, basestring filename):
   cdef char space
   cdef FILE *f = fopen(filename, "w")
   cdef cnp.ndarray[cnp.float32_t, ndim=1] zvalues = model.zvalues
-  cx, cy, dx, dy = model.computeBBParams()
+  cx, cy, dx, dy = computeSlicedModelBBParams(model)
   sx = cx-dx/2
   sy = cy-dy/2
   if f==NULL:
     raise ValueError('Could not open the file in write mode')
   try:
-    #header
-    fprintf(f, """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    with nogil:
+      #header
+      fprintf(f, """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.0//EN" "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd">
 <svg width="%f" height="%f" xmlns="http://www.w3.org/2000/svg" xmlns:svg="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:slic3r="http://slic3r.org/namespaces/slic3r">
 <!-- 
 Generated using pyslic3r pre-alpha
  -->
 """, dx, dy)
-    #layers
-    for k1 in range(model.thisptr[0].size()):
-      z = zvalues[k1]
-      #layer prefix
-      fprintf(f, '  <g id="layer%d" slic3r:z="%f">\n', k1, z)
-      #expolygons
-      for k2 in range(model.thisptr[0][k1].size()):
-        #contour
-        writePolygonSVG(&model.thisptr[0][k1][k2].contour, f, True, sx, sy)
-        #holes
-        for k3 in range(model.thisptr[0][k1][k2].holes.size()):
-          writePolygonSVG(&model.thisptr[0][k1][k2].holes[k3], f, False, sx, sy)
-      #layer postfix
-      fputs('  </g>\n', f)
-    #close svg
-    fputs('</svg>', f)
+      #layers
+      for k1 in range(model.thisptr[0].size()):
+        z = zvalues[k1]
+        #layer prefix
+        fprintf(f, '  <g id="layer%d" slic3r:z="%f">\n', k1, z)
+        #expolygons
+        for k2 in range(model.thisptr[0][k1].size()):
+          #contour
+          writePolygonSVG(&model.thisptr[0][k1][k2].contour, f, True, sx, sy)
+          #holes
+          for k3 in range(model.thisptr[0][k1][k2].holes.size()):
+            writePolygonSVG(&model.thisptr[0][k1][k2].holes[k3], f, False, sx, sy)
+        #layer postfix
+        fputs('  </g>\n', f)
+      #close svg
+      fputs('</svg>', f)
   finally:
     fclose(f)
             
@@ -611,12 +651,12 @@ cdef void writeAsPLY(SlicedModel model, basestring filename):
   cdef cnp.ndarray[cnp.float32_t, ndim=1] zvalues = model.zvalues
   polss = triangulateAllLayers(model)
   try:
-    numP, numV = countPolygons(polss)
     f = fopen(filename, "w")
     if f==NULL:
       raise ValueError('Could not open the file in write mode')
     try:
       with nogil:
+        countPolygons(polss, &numP, &numV)
         #header
         fprintf(f, 'ply\nformat ascii 1.0\nelement vertex %d\nproperty float x\nproperty float y\nproperty float z\nelement face %d\nproperty list uchar int vertex_index\nend_header\n', numV, numP)
         #points
@@ -640,6 +680,39 @@ cdef void writeAsPLY(SlicedModel model, basestring filename):
       fclose(f)
   finally:
     del polss
+
+
+@cython.boundscheck(False)
+def computeSlicedModelBBParams(SlicedModel model):  
+  """Compute some parameters of the bounding box: the center and the size"""
+  cdef unsigned int k1, k2, k3, k4
+  cdef double minx, maxx, miny, maxy, x, y, cx, cy, dx, dy
+  
+  minx = miny =  INFINITY
+  maxx = maxy = -INFINITY
+  for k1 in range(model.thisptr[0].size()):
+    for k2 in range(model.thisptr[0][k1].size()):
+      for k3 in range(model.thisptr[0][k1][k2].contour.points.size()):
+        x = model.thisptr[0][k1][k2].contour.points[k3].x
+        y = model.thisptr[0][k1][k2].contour.points[k3].y
+        minx = min(minx, x)
+        miny = min(miny, y)
+        maxx = max(maxx, x)
+        maxy = max(maxy, y)
+      for k3 in range(model.thisptr[0][k1][k2].holes.size()):
+        for k4 in range(model.thisptr[0][k1][k2].holes[k3].points.size()):
+          x = model.thisptr[0][k1][k2].holes[k3].points[k4].x
+          y = model.thisptr[0][k1][k2].holes[k3].points[k4].y
+          minx = min(minx, x)
+          miny = min(miny, y)
+          maxx = max(maxx, x)
+          maxy = max(maxy, y)
+  cx = (maxx+minx)/2*SCALING_FACTOR
+  cy = (maxy+miny)/2*SCALING_FACTOR
+  dx = (maxx-minx)*SCALING_FACTOR
+  dy = (maxy-miny)*SCALING_FACTOR
+  #return (minx, maxx, miny, maxy)
+  return (cx, cy, dx, dy)
 
     
 @cython.boundscheck(False)
@@ -671,40 +744,57 @@ cdef void writePolygonSVG(Polygon * pol, FILE * f, bool contour, double cx, doub
 ########## TRANSLATING SlicedModel TO PYTHONIC STRUCTURE ##########
 #######################################################################
 
+cdef class ExPolygon:
+  """Translation of ExPolygon to Python. Similar to a namedtuple"""
+  cdef cnp.ndarray _contour
+  cdef list        _holes
 
-@cython.boundscheck(False)
-cdef list layers2List(SLICEDMODEL *layers):
-  """helper function to transform a sliced model into a native Python structure"""
-  cdef int sz = layers[0].size()
-  cdef int k
-  lays = [ExPolygons2List(&layers[0][k]) for k in range(sz)]
-#  lays = [None]**sz
-#  for k in range(sz):
-#    lays[k] = ExPolygons2List(&layers[0][k])
-  return lays
+  property contour:
+    def __get__(self):
+      return self._contour
+    def __set__(self, cnp.ndarray val):
+      self.contour = val
 
-@cython.boundscheck(False)
-cdef list ExPolygons2List(vector[ExPolygon] *expols):
-  """helper function for layers2List"""
-  cdef int sz = expols[0].size()
-  cdef int k
-  pols = [ExPolygon2Tuple(&expols[0][k]) for k in range(sz)]
-#  pols = [None]**sz
-#  for k in range(sz):
-#    pols[k] = ExPolygon2Tuple(&expols[0][k])
-  return pols
-      
-@cython.boundscheck(False)
-cdef tuple ExPolygon2Tuple(ExPolygon *expol):
-  """helper function for ExPolygons2List"""
-  cdef Polygon *pol
-  cdef int k, sz
-  pol = &expol.contour
-  cdef cnp.ndarray[dtype=cnp.int64_t, ndim=2] contour = Polygon2arrayI(&expol[0].contour)
-#  cdef cnp.ndarray[dtype=cnp.int64_t, ndim=2] hole
-  sz = expol[0].holes.size()
-  holes = [Polygon2arrayI(&expol[0].holes[k]) for k in range(sz)]
-  return (contour, holes)
+  property holes:
+    def __get__(self):
+      return self._holes
+    def __set__(self, list val):
+      self.holes = val
+  
+  def __cinit__(self, cnp.ndarray c, list hs):
+    self._contour = c
+    self._holes   = hs
+
+  def __str__(self):
+    return "".join(("ExPolygon(contour=", self._contour.__str__(),  ", holes=", self._holes.__str__(),  ")"))
+  def __repr__(self):
+    return "".join(("ExPolygon(contour=", self._contour.__repr__(), ", holes=", self._holes.__repr__(), ")"))
+
+cdef class Layer:
+  """Translation of each one of the layers of a SlicedModel to Python. Similar to a namedtuple"""
+  cdef double _z
+  cdef list   _expolygons
+
+  property z:
+    def __get__(self):
+      return self._z
+    def __set__(self,double val):
+      self.z = val
+
+  property expolygons:
+    def __get__(self):
+      return self._expolygons
+    def __set__(self, list val):
+      self.expolygons = val
+  
+  def __cinit__(self, double z, list exp):
+    self._z          = z
+    self._expolygons = exp
+
+  def __str__(self):
+    return "".join(("Layer(z=", self._z.__str__(),  ", expolygons=", self._expolygons.__str__(),  ")"))
+  def __repr__(self):
+    return "".join(("Layer(z=", self._z.__repr__(), ", expolygons=", self._expolygons.__repr__(), ")"))
 
 @cython.boundscheck(False)
 cdef cnp.ndarray[dtype=cnp.int64_t, ndim=2] Polygon2arrayI(Polygon *pol):
