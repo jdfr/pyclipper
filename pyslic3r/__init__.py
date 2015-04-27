@@ -22,11 +22,12 @@ def _dynamicLoadHack():
   cdll.LoadLibrary(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'libslic3rlib.so'))
 
 try:
-  from ._pyslic3r import *
+  from ._SlicedModel import *
 except ImportError:
   #probably the linker cannot find libslicerlib.so because it is not installed.
   #Trying a hack...
   _dynamicLoadHack()
   #trying again...
-  from ._pyslic3r import *
+  from ._SlicedModel import *
 
+from ._TriangleMesh import *

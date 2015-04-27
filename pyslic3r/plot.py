@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 from matplotlib.path import Path
 from matplotlib.patches import PathPatch
 import mpl_toolkits.mplot3d as m3
-import _pyslic3r as p
+import _SlicedModel as p
 
 def expolygon2path(contour, holes):
   """helper function for slices2Patches"""
