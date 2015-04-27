@@ -59,6 +59,6 @@ include_directories(${slic3r_INCLUDE_DIRS})
 #  message(STATUS "dir='${dir}'")
 #endforeach()
 
-#ADD_LIBRARY(slic3rlib SHARED ${c_sources})
-ADD_LIBRARY(slic3rlib STATIC ${c_sources})
+ADD_LIBRARY(slic3rlib SHARED ${c_sources})
+#ADD_LIBRARY(slic3rlib STATIC ${c_sources})
 
