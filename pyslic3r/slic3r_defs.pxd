@@ -33,6 +33,18 @@ cdef extern from "libslic3r/Point.hpp" namespace "Slic3r" nogil:
     coord_t x
     coord_t y
   ctypedef vector[Point] Points
+  
+  cdef cppclass Pointf3:
+    coordf_t x
+    coordf_t y
+    coordf_t z
+
+
+cdef extern from "libslic3r/BoundingBox.hpp" namespace "Slic3r" nogil:
+  cdef cppclass BoundingBoxf3:
+    Pointf3 min
+    Pointf3 max
+
 
 cdef extern from "libslic3r/MultiPoint.hpp" namespace "Slic3r" nogil:
   cdef cppclass MultiPoint:
@@ -89,10 +101,12 @@ cdef extern from "libslic3r/TriangleMesh.hpp" namespace "Slic3r" nogil:
     void flip_x()
     void flip_y()
     void flip_z()
-    void align_to_origin()
-    #void rotate(double angle, Point* center)
-    #TriangleMeshPtrs split() const
-    void merge(const _TriangleMesh &mesh)
+    BoundingBoxf3 bounding_box() 
+    void merge(const _TriangleMesh &mesh) except +
+    bool repaired
+    bool needed_repair() const
+    size_t facets_count() const
+    
         
   cdef double DEFAULT_SLICING_SAFETY_OFFSET "DEFAULT_SLICING_SAFETY_OFFSET"
     

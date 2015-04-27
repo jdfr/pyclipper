@@ -22,7 +22,7 @@ from slic3r_defs cimport *
 
 from libc.stdio cimport *
 
-from numpy.math cimport INFINITY#, NAN, isnan
+from numpy.math cimport INFINITY, NAN, isnan
 
 cdef extern from "math.h" nogil:
   double fabs(double)
@@ -46,6 +46,46 @@ cdef class TriangleMesh:
   def __dealloc__(self):
     del self.thisptr
   
+  @cython.boundscheck(False)  
+  def translate(self, double x,double y,double z):
+    self.thisptr[0].translate(x,y,z)
+  
+  @cython.boundscheck(False)  
+  def numTriangles(self):
+    return self.thisptr[0].facets_count()
+  
+  @cython.boundscheck(False)  
+  def repairNeeded(self):
+    return self.thisptr[0].needed_repair()
+  
+  @cython.boundscheck(False)  
+  def hasBeenRepaired(self):
+    return self.thisptr[0].repaired
+  
+  @cython.boundscheck(False)  
+  def repair(self):
+    self.thisptr[0].repair()
+  
+  @cython.boundscheck(False)  
+  cpdef cnp.ndarray[cnp.float32_t, ndim=2] boundingBox(self):
+    cdef BoundingBoxf3 bb = self.thisptr[0].bounding_box()
+    cdef cnp.npy_intp *retsize = [3,2]
+    cdef cnp.ndarray[cnp.float32_t, ndim=2] rbb = cnp.PyArray_EMPTY(2, retsize, cnp.NPY_FLOAT32, 0)
+    rbb[0,0] = bb.min.x
+    rbb[1,0] = bb.min.y
+    rbb[2,0] = bb.min.z
+    rbb[0,1] = bb.max.x
+    rbb[1,1] = bb.max.y
+    rbb[2,1] = bb.max.z
+    return rbb
+  
+  @cython.boundscheck(False)  
+  def alignToCenter(self):
+    "center in the plane XY, and rebase in Z so the model is in touching the XY plane, in the +Z half-space"
+    cdef cnp.ndarray[cnp.float32_t, ndim=2] bb = self.boundingBox()
+    cdef cnp.ndarray c  = np.sum(bb, axis=1)/2
+    self.thisptr[0].translate(-c[0], -c[1], -bb[2,0])
+  
   def add(self, TriangleMesh other):
     """add another mesh to this one. WARNING: no boolean operation is performed.
     If the meshes intersect, unexpected errors will likely follow"""
@@ -64,6 +104,27 @@ cdef class TriangleMesh:
     else:
       raise Exception('mode not understood: '+mode)
 
+  @cython.boundscheck(False)
+  cpdef cnp.ndarray[cnp.float32_t, ndim=2] slicePlanes(self, double value, double startshift=NAN, basestring mode='c'):
+    """Simple slicing, with the parameter "mode" specifying either 'constant' z steps, or a 'fixed' number of steps.
+    if specified, the parameter startshift is the height of the first slice"""
+    cdef cnp.ndarray[cnp.float32_t, ndim=2] bb = self.boundingBox()
+    cdef cnp.ndarray[cnp.float32_t, ndim=1] zs
+    if mode[0]=='c': #'constant'
+      if isnan(startshift):
+        startshift = value
+      zs = np.arange(bb[2,0]+startshift,bb[2,1], value, dtype=np.float32)
+      if fabs(zs[-1]-bb[2,1])<np.spacing(bb[2,1]):
+        zs = zs[:-1]
+    elif mode[0]=='f':#'fixed'
+      if isnan(startshift):
+        zs = np.linspace(bb[2,0],bb[2,1], value+2, dtype=np.float32)[1:-1]
+      else:
+        zs = np.linspace(bb[2,0]+startshift,bb[2,1], value, endpoint=False, dtype=np.float32)
+    else:
+      raise ValueError('Invalid Slice Mode')
+    return zs
+    
   @cython.boundscheck(False)
   def doslice(self, cnp.ndarray[cnp.float32_t, ndim=1] zs, double safety_offset=DEFAULT_SLICING_SAFETY_OFFSET):
     """generate a sliced model of this mesh"""
