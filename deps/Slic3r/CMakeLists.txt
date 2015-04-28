@@ -22,37 +22,65 @@ CMAKE_MINIMUM_REQUIRED(VERSION 2.6.0)
 
 PROJECT(slic3rlib)
 
-
 SET(CMAKE_BUILD_TYPE "Release" CACHE STRING "Release type")
 
 ADD_DEFINITIONS(-fPIC)
 
-#set (DODEBUG "-DSLIC3R_DEBUG")
-set (DODEBUG "")
-
 #add compiler flags from Slicer/xs/Build.PL (HAS_BOOL and SLIC3RXS
 #are specific to the perl build, so they are not included here)
 # _GLIBCXX_USE_C99 : to get the long long type for g++
-# HAS_BOOL         : stops Perl/lib/CORE/handy.h from doing "#  define bool char" for MSVC
 # NOGDI            : prevents inclusion of wingdi.h which defines functions Polygon() and Polyline() in global namespace
-set (SLIC3RFLAGS "-D_GLIBCXX_USE_C99 -DNOGDI ${DODEBUG}")
+ADD_DEFINITIONS(-D_GLIBCXX_USE_C99 -DNOGDI)
 
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC ${SLIC3RFLAGS}")
-set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
+#USE THESE OPTIONS FROM THE COMMAND LINE IN THIS WAY:
+#          cmake .. -DDODEBUG=ON
+#          cmake .. -DDOTIMING=ON
+#BUT BE AWARE THAT THEY WILL IMPLY RECOMPILATION OF ALL FILES
+option(DODEBUG           "compile with debug  messages" OFF)
+option(DOTIMING          "compile with timing messages" OFF)
+option(DONOTUSEPOLY2TRI  "disable functions that require the use of poly2tri" ON)
+option(FULLLIBRARY       "include all sources in the library" OFF)
 
-set(SRC Slic3r/xs/src)
+set(MASK "/*.c*") #*.c, *.cc, *.cpp
+set(SRC ${CMAKE_CURRENT_SOURCE_DIR}/Slic3r/xs/src)
+file(GLOB_RECURSE poly2tri_c  "${SRC}/poly2tri${MASK}") 
+file(GLOB_RECURSE admesh_c    "${SRC}/admesh${MASK}")
+file(GLOB         slic3r1_c   "${SRC}${MASK}")
+if (FULLLIBRARY)
+  file(GLOB_RECURSE slic3r2_c "${SRC}/libslic3r${MASK}")
+else()
+  #include just the sources we need right now
+  set (selectedfiles BoundingBox ClipperUtils ExPolygon ExPolygonCollection Geometry Line MultiPoint Point Polygon Polyline TriangleMesh utils)
+  set(slic3r2_c "")
+  foreach(f ${selectedfiles})
+    list(APPEND slic3r2_c ${SRC}/libslic3r/${f}.cpp)
+  endforeach()
+endif()
 
+set(c_sources ${admesh_c} ${slic3r1_c} ${slic3r2_c})
 
-#*.c, *.cc, *.cpp
-file(GLOB_RECURSE c_sources "${SRC}/*.c*")
-file(GLOB_RECURSE h_sources "${SRC}/*.h")
-#add silly config.h dependency in one of Slic3r's subprojects
-set(CONFIGH Slic3r-include)
+if (FULLLIBRARY OR NOT DONOTUSEPOLY2TRI)
+  set(c_sources ${c_sources} ${poly2tri_c})
+endif()
+set(SOURCES ${c_sources} )
 
+set(CONFIGH Slic3r-include) #add silly config.h dependency in one of Slic3r's subprojects
 set (slic3r_INCLUDE_DIRS ${CONFIGH} ${SRC} ${SRC}/admesh ${SRC}/boost ${SRC}/libslic3r ${SRC}/poly2tri)
-set(SOURCES ${c_sources} ${h_sources})
 include_directories(${slic3r_INCLUDE_DIRS})
 
+if (DODEBUG)
+  ADD_DEFINITIONS(-DSLIC3R_DEBUG)
+endif()
+if (DOTIMING)
+  set_source_files_properties (${SRC}/libslic3r/TriangleMesh.cpp ${SRC}/admesh/normals.c ${SRC}/admesh/stlinit.c COMPILE_FLAGS -DPRINT_TIMING)
+endif()
+if (DONOTUSEPOLY2TRI)
+  ADD_DEFINITIONS(-DNOPOLYT2RI)
+endif()
+
+#foreach(file ${c_sources})
+#  message(STATUS "file='${file}'")
+#endforeach()
 ## to see the include directories
 #get_property(dirs DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY INCLUDE_DIRECTORIES)
 #foreach(dir ${dirs})
@@ -62,3 +90,6 @@ include_directories(${slic3r_INCLUDE_DIRS})
 ADD_LIBRARY(slic3rlib SHARED ${c_sources})
 #ADD_LIBRARY(slic3rlib STATIC ${c_sources})
 
+get_filename_component(BASEPATH ${CMAKE_CURRENT_LIST_FILE} DIRECTORY)
+set (CMAKE_INSTALL_PREFIX "${BASEPATH}/../..")
+install(TARGETS slic3rlib DESTINATION "pyslic3r")
