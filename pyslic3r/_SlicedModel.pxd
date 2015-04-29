@@ -15,5 +15,4 @@ cdef class SlicedModel:
   cpdef unsigned int numLayers(self)
   cpdef unsigned int numExPolygons(self, unsigned int nlayer)
   cpdef unsigned int numHoles(self, unsigned int nlayer, unsigned int nExpolygon)
-  cdef cnp.ndarray _contour(self, unsigned int nlayer, unsigned int nExpolygon, bool asInteger)
-  cdef cnp.ndarray _hole(self, unsigned int nlayer, unsigned int nExpolygon, unsigned int nhole, bool asInteger)
+  cdef cnp.ndarray Polygon2array(self, s3.Polygon *pol, bool asInteger, bool asView)
