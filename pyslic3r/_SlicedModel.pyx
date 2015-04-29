@@ -193,38 +193,6 @@ cdef class SlicedModel:
       raise ValueError('incorrect Expolygon ID')
     return self.thisptr[0][nlayer][nExpolygon].holes.size()
 
-#VERSION OF COUNTPOLYGONS FOR thisptr  
-#  @cython.boundscheck(False)  
-#  def countVertsAndPols(self):
-#    """count the number of vertices and polygons (both contours and holes) in all layers"""
-#    cdef unsigned int numV = 0
-#    cdef unsigned int numP = 0
-#    cdef unsigned int k1, k2, k3, v2, v3
-#    for k1 in range(self.thisptr[0].size()):
-#      v2 = self.thisptr[0][k1].size()
-#      numP += v2
-#      for k2 in range(v2):
-#        v3 = self.thisptr[0][k1][k2].holes.size()
-#        numP += v3
-#        numV += self.thisptr[0][k1][k2].contour.points.size()
-#        for k3 in range(v3):
-#          numV += self.thisptr[0][k1][k2].holes[k3].points.size()
-#    return (numV, numP)
-
-#VERSION OF allExPolygons FOR JUST ONE LAYER
-#  @cython.boundscheck(False)  
-#  def layerExPolygons(self, unsigned int nlayer, bool asInteger=False):
-#    """return a generator for all expolygons in a layer. Each ExPolygon is returned as a tuple
-#    with an expolygon index (within the layer), a contour and a list of holes"""
-#    cdef unsigned int k
-#    cdef cnp.ndarray contour
-#    if nlayer>=self.thisptr[0].size():
-#      raise ValueError('incorrect layer ID')
-#    for k in xrange(self.thisptr[0][nlayer].size()):
-#      contour = self._contour(nlayer, k, asInteger)
-#      holes = [self._hole(nlayer, k, h, asInteger) for h in xrange(self.thisptr[0][nlayer][k].holes.size())]
-#      yield (contour, holes)
-      
   @cython.boundscheck(False)
   def allExPolygons(self, bool asInteger=False):
     """return a generator for all expolygons in all layers. Each ExPolygon is returned as a tuple
@@ -415,20 +383,6 @@ cdef void countPolygons(vector[vector[Polygons]] * polss, unsigned int *rnumP, u
   rnumV[0] = numV
 
 
-##VERSION OF triangulateAllLayers for just one layer
-#@cython.boundscheck(False)  
-#cdef vector[Polygons] * triangulateLayer(SlicedModel model, unsigned int nlayer):
-#  """generate a model of a layer apt to be represented in a 3D view"""
-#  cdef int k, num
-#  cdef vector[Polygons] * pols = new vector[Polygons]()
-#  if nlayer>=model.thisptr.size():
-#    raise ValueError('incorrect layer ID')
-#  num = model.thisptr[0][nlayer].size()
-#  pols[0].resize(num)
-#  for k in range(num):
-#    model.thisptr[0][nlayer][k].triangulate_pp(&pols[0][k])
-#  return pols
-  
 @cython.boundscheck(False)  
 cdef vector[vector[Polygons]] * triangulateAllLayers(SlicedModel model) nogil:
   """generate a model of the layers apt to be represented in a 3D view"""
