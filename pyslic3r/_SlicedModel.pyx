@@ -37,23 +37,52 @@ cdef double INV_SCALING_FACTOR = 1.0/SCALING_FACTOR
 scalingFactor    = SCALING_FACTOR
 invScalingFactor = INV_SCALING_FACTOR
 
-cdef object slice2xrange(int size, rang):
+cdef object slice2xrange(int size, bool *justinteger, rang):
+  """translate some python objects to a xrange"""
+  cdef int start, stop, step
+  justinteger[0] = False
+  
   if rang is None:
-    rango = xrange(size)
+    return xrange(size)
+    
   elif isinstance(rang, slice):
-    if rang.start is not None:
-      if (not isinstance(rang.start, int)) or (rang.start<0) or (rang.start>=size):
-        raise IndexError('Invalid start index range')
-      if (not isinstance(rang.stop, int)) or (rang.stop<0) or (rang.stop>size):
-        raise IndexError('Invalid stop range')
-    rango = xrange(rang.start, rang.stop, rang.step)
+    
+    obj = rang.start
+    if obj is None:
+      start = 0
+    elif isinstance(obj, int):
+      start = obj
+      start = max(0, start)
+      start = min(start, size)
+    else:
+      raise IndexError('Invalid start index value')
+      
+    obj = rang.stop
+    if obj is None:
+      stop = size
+    elif isinstance(obj, int):
+      stop = obj
+      stop = max(start, stop)      
+      stop = min(stop, size)
+    else:
+      raise IndexError('Invalid stop index value')
+
+    obj = rang.step
+    if obj is None:
+      step = 1
+    else:
+      step = obj
+    return xrange(start, stop, step)
+    
   elif isinstance(rang, int):
-    if (rang<0) or (rang>=size):
+    start = rang
+    if (start<0) or (start>=size):
       raise IndexError('Invalid index')
-    rango = (rang,)
+    justinteger[0] = True
+    return xrange(start, start+1)
+
   else:
     raise IndexError("Invalid indexing object")
-  return rango
   
 
 #######################################################################
@@ -179,7 +208,7 @@ cdef class SlicedModel:
       raise Exception('mode not understood: '+mode)
       
   @cython.boundscheck(False)  
-  def toLayerList(self, bool asInteger=False, bool asView=False, rang=None):
+  cpdef object toLayerList(self, bool asInteger=False, bool asView=False, rang=None):
     """return a full-fledged pythonic representation of this SlicedModel object.
     
     This representation is a list of Layer objects.
@@ -195,42 +224,54 @@ cdef class SlicedModel:
     Contours and holes are numpy arrays of 2d points, each one representing a
     polygon."""
     
-    rango = slice2xrange(self.thisptr[0].size(), rang)
+    cdef bool justInteger
+    rango = slice2xrange(self.thisptr[0].size(), &justInteger, rang)
     
     ret =  [Layer(self.zvalues[nlayer],
-                  [ExPolygon(self.Polygon2array(&self.thisptr[0][nlayer][nexp].contour,      asInteger, asView),
-                            [self.Polygon2array(&self.thisptr[0][nlayer][nexp].holes[nhole], asInteger, asView)
-                              for nhole in xrange(self.numHoles(nlayer, nexp))])
-                   for nexp in xrange(self.numExPolygons(nlayer))])
+                  self._toExPolygonList(nlayer, asInteger, asView, None))
             for nlayer in rango]
-    if isinstance(rango, tuple):
+    if justInteger:
       return ret[0]
     return ret
 
   @cython.boundscheck(False)  
-  def toExPolygonList(self, unsigned int nlayer, bool asInteger=False, bool asView=False, rang=None):
+  cpdef object toExPolygonList(self, unsigned int nlayer, bool asInteger=False, bool asView=False, rang=None):
     """same as toLayerList(), but for ExPolygons"""
     if nlayer>=self.thisptr[0].size():
       raise IndexError('incorrect layer ID')
-    rango = slice2xrange(self.thisptr[0][nlayer].size(), rang)
+    return self._toExPolygonList(nlayer, asInteger, asView, rang)
+
+  @cython.boundscheck(False)  
+  cdef object _toExPolygonList(self, unsigned int nlayer, bool asInteger=False, bool asView=False, rang=None):
+    """same as toLayerList(), but for ExPolygons"""
+    if nlayer>=self.thisptr[0].size():
+      raise IndexError('incorrect layer ID')
+    cdef bool justInteger
+    rango = slice2xrange(self.thisptr[0][nlayer].size(), &justInteger, rang)
     ret =  [ExPolygon(self.Polygon2array(&self.thisptr[0][nlayer][nexp].contour,      asInteger, asView),
-                     [self.Polygon2array(&self.thisptr[0][nlayer][nexp].holes[nhole], asInteger, asView)
-                              for nhole in xrange(self.numHoles(nlayer, nexp))])
+                      self._toHoleList(nlayer, nexp, asInteger, asView, None))
                    for nexp in rango]
-    if isinstance(rango, tuple):
+    if justInteger:
       return ret[0]
     return ret
 
-  def toHoleList(self, unsigned int nlayer, unsigned int nexp, bool asInteger=False, bool asView=False, rang=None):
+  @cython.boundscheck(False)  
+  cpdef object toHoleList(self, unsigned int nlayer, unsigned int nexp, bool asInteger=False, bool asView=False, rang=None):
     """same as toLayerList(), but for holes"""
     if nlayer>=self.thisptr[0].size():
       raise IndexError('incorrect layer ID')
     if   nexp>=self.thisptr[0][nlayer].size():
       raise IndexError('incorrect Expolygon ID')
-    rango = slice2xrange(self.thisptr[0][nlayer][nexp].holes.size(), rang)
+    return self._toHoleList(nlayer, nexp, asInteger, asView, rang)
+    
+  @cython.boundscheck(False)  
+  cdef object _toHoleList(self, unsigned int nlayer, unsigned int nexp, bool asInteger=False, bool asView=False, rang=None):
+    """same as toLayerList(), but for holes"""
+    cdef bool justInteger
+    rango = slice2xrange(self.thisptr[0][nlayer][nexp].holes.size(), &justInteger, rang)
     ret =  [self.Polygon2array(&self.thisptr[0][nlayer][nexp].holes[nhole], asInteger, asView)
                for nhole in rango]
-    if isinstance(rango, tuple):
+    if justInteger:
       return ret[0]
     return ret
     
@@ -253,35 +294,43 @@ cdef class SlicedModel:
         * self[int, int, 'c']:   return array of coordinates of Contour
         * self[int, int, int]:   return array of coordinates of Hole
         * self[int, int, slice]: return list of Holes
+      
+      Slice limits are automatically clipped to be coherent with the object dimensions
+      
+      Note that it is not practical to slice the list/arrays here becuase of ambiguities
+      (for example, self[int, int, int] may be either a Hole or a point in a Contour)
         """
-    asv = True
+    cdef unsigned int ndims, nlayer, nexp
+    cdef bool asi = True
+    cdef bool asv = True
     if isinstance(val, int) or isinstance(val, slice):
-      return self.toLayerList(asView=asv, rang=val)
+      return self.toLayerList(asi, asv, val)
     elif isinstance(val, tuple):
       ndims = len(val)
       if ndims==1:
-        return self.toLayerList(asView=asv, rang=val[0])
+        return self.toLayerList(asi, asv, val[0])
       else:
-        nlayer = val[0]
-        if not isinstance(nlayer, int):
+        if not isinstance(val[0], int):
           raise IndexError('multidimensional slicing across layers is not supported')
         else:
+          nlayer = val[0]
           if ndims==2:
             if isinstance(val[1], basestring):
               return self.zvalues[nlayer]
             else:
-              return self.toExPolygonList(nlayer, asView=asv, rang=val[1])
+              return self.toExPolygonList(nlayer, asi, asv, val[1])
           else:
-            nexp = val[1]
-            if not isinstance(nexp, int):
+            
+            if not isinstance(val[1], int):
               raise IndexError('multidimensional slicing across ExPolygons is not supported')
             else:
               if ndims>3:
                 raise IndexError('ExPolygon components are arrays. If you want to slice them, do it separately')
+              nexp = val[1]
               if isinstance(val[2], basestring): #get the contour
-                return self.Polygon2array(&self.thisptr[0][nlayer][nexp].contour, False, asv)
+                return self.Polygon2array(&self.thisptr[0][nlayer][nexp].contour, asi, asv)
               else:
-                return self.toHoleList(nlayer, nexp, asView=True, rang=val[2])
+                return self.toHoleList(nlayer, nexp, asi, asv, val[2])
     else:
       raise IndexError('Invalid slice object')
   
@@ -325,7 +374,7 @@ cdef class SlicedModel:
         yield (k1, k2, z, contour, holes)
 
   @cython.boundscheck(False)
-  cdef cnp.ndarray Polygon2array(self, Polygon *pol, bool asInteger, bool asView):
+  cdef cnp.ndarray Polygon2array(self, Polygon *pol, bool asInteger=True, bool asView=True):
     """common code for getting arrays from contours and holes"""
     if asView:
       return Polygon2arrayView(self, pol)
