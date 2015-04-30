@@ -755,13 +755,13 @@ cdef class ExPolygon:
     def __get__(self):
       return self._contour
     def __set__(self, cnp.ndarray val):
-      self.contour = val
+      self._contour = val
 
   property holes:
     def __get__(self):
       return self._holes
     def __set__(self, list val):
-      self.holes = val
+      self._holes = val
   
   def __cinit__(self, cnp.ndarray c=None, list hs=None, *args, **kwargs):
     self._contour = c
@@ -790,13 +790,13 @@ cdef class Layer:
     def __get__(self):
       return self._z
     def __set__(self,double val):
-      self.z = val
+      self._z = val
 
   property expolygons:
     def __get__(self):
       return self._expolygons
     def __set__(self, list val):
-      self.expolygons = val
+      self._expolygons = val
   
   def __cinit__(self, double z=0.0, list exp=None, *args, **kwargs):
     self._z          = z
