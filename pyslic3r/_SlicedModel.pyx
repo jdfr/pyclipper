@@ -798,7 +798,7 @@ def layerList2SlicedModel(list layers, SlicedModel model=None):
     model.zvalues[nlayer]         = layer._z
     exps                          = layer._expolygons
     lenexps                       = len(exps)
-    model.thisptr[0][nlayer].resize(length)
+    model.thisptr[0][nlayer].resize(lenexps)
     #for each expolygon
     for nexp in range(lenexps):
       exp                         = exps[nexp]
