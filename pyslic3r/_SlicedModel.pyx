@@ -77,7 +77,7 @@ cdef object slice2xrange(int size, bool *justinteger, rang):
   elif isinstance(rang, int):
     start = rang
     if (start<0) or (start>=size):
-      raise IndexError('Invalid index')
+      raise IndexError('Invalid index %d: %d' % (size, start))
     justinteger[0] = True
     return xrange(start, start+1)
 
@@ -98,6 +98,20 @@ def _rangecheck(int init, int end, int size):
     raise IndexError('Invalid range')
   if end>=size:
     raise IndexError('last item for removal must be within the item indexes')
+
+cdef class SlicedModelIterator:
+  cdef SlicedModel model
+  cdef unsigned int current
+  def __cinit__(self, SlicedModel m):
+    self.model   = m
+    self.current = 0
+  def __next__(self):
+    if self.current >= self.model.thisptr[0].size():
+      raise StopIteration
+    else:
+      x = self.model.toLayerList(True, True, self.current)
+      self.current += 1
+      return x
 
 cdef class SlicedModel:
   """wrapper for the Slic3r data structure for a list of sliced layers"""
@@ -212,7 +226,7 @@ cdef class SlicedModel:
     """Same as toLayerList, but returns the list of layers wrapped in a SliceCollection
     object. This will be useful if SliceCollection acquires more attributes,
     for example if SCALING_FACTOR is un-hardcoded and moved to SlicedModel"""
-    if isinstance(rang, int):
+    if isinstance(rang, int): #make sure that toLayerList() returns a list instead of a naked Layer
       rang = slice(rang, rang+1, 1)
     return SliceCollection(self.toLayerList(asInteger, asView, rang))
       
@@ -287,6 +301,8 @@ cdef class SlicedModel:
     
   def __len__(self):
     return self.thisptr[0].size()
+  def __iter__(self):
+    return SlicedModelIterator(self)
   
   def __getitem__(self, val):
     """rich but incomplete multidimension slicing support.
@@ -786,8 +802,7 @@ cdef class ExPolygon:
   def __setstate__(self, d):
     self._contour = d['_contour']
     self._holes   = d['_holes']
-    
-
+  
   def __str__(self):
     return "".join(("ExPolygon(contour=", self._contour.__str__(),  ", holes=", self._holes.__str__(),  ")"))
   def __repr__(self):
@@ -824,6 +839,8 @@ cdef class Layer:
     
   def __len__(self):
     return len(self._expolygons)
+  def __iter__(self):
+    return self._slices.__iter__()
 
   def __getitem__(self, val):
     return self._expolygons.__getitem__(val)
@@ -861,6 +878,8 @@ cdef class SliceCollection:
     
   def __len__(self):
     return len(self._slices)
+  def __iter__(self):
+    return self._slices.__iter__()
 
   def __getitem__(self, val):
     return self._slices.__getitem__(val)

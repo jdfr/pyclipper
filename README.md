@@ -20,19 +20,12 @@ This code has been tested only on debian sid, but it should also work in other d
 
 Slic3r has to be checked out to `./deps/Slic3r/Slic3r`. To compile slic3r's C++ library, go to `./deps/Slic3r/Slic3r-build` and do:
 
-```python
-x = [a+1 for a in xrange(10)]
-for q in x:
-  print x+1
-```
-
-
 ```bash
 cmake ..
 make
 ```
 
-Then, go to `./pyslic3r` and do:
+Then, go to the base directory and do:
 
 ```bash
 python setup.py build_ext --inplace
@@ -42,9 +35,14 @@ python setup.py build_ext --inplace
 
 The use of cmake should make it rather easy to compile slic3r's C++ library in Windows: just run the cmake GUI to generate a Visual Studio project to compile the library. the CMakeLists.txt is configured to generate a static library because it is easier to use in development in that way. However, the proper way to do it is probably to generate a shared library. 
 
-Currently, ./pyslic3r/setup.py is hardcoded to link the static slic3r library generated in my debian system into the cython bindings. It should probably work out of the box in other distros. Porting to windows should be easy.
+Currently, setup.py is hardcoded to link the slic3r library generated in slic3r-build into the cython bindings. It should probably work out of the box in other distros. Porting to windows should be easy.
 
 ## Notes
 
-slic3r's C++ codebase is compiled wholesale into the library, although I am using only a tiny bit of it.
+pyslic3r uses only a part of Slic3r's C++ codebase, so some parts of the compiled C++ library are not used.
+
+# License
+
+This library is licensed under the AGPLv3.0.
+
 
