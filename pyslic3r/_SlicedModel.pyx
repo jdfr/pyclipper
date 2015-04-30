@@ -763,7 +763,7 @@ cdef class ExPolygon:
     def __set__(self, list val):
       self.holes = val
   
-  def __cinit__(self, cnp.ndarray c=None, list hs=None):
+  def __cinit__(self, cnp.ndarray c=None, list hs=None, *args, **kwargs):
     self._contour = c
     self._holes   = hs
   
@@ -798,7 +798,7 @@ cdef class Layer:
     def __set__(self, list val):
       self.expolygons = val
   
-  def __cinit__(self, double z=0.0, list exp=None):
+  def __cinit__(self, double z=0.0, list exp=None, *args, **kwargs):
     self._z          = z
     self._expolygons = exp
 
