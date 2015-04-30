@@ -10,6 +10,10 @@ import os.path as op
 
 from numpy.math cimport NAN, isnan
 
+from numbers import Number
+
+#from libc.stdio cimport printf, puts
+
 from slic3r_defs cimport *
 
 cimport _SlicedModel
@@ -20,6 +24,7 @@ cnp.import_array()
 
 cdef extern from "math.h" nogil:
   double fabs(double)
+
 
 #######################################################################
 ########## TriangleMesh WRAPPER CLASS ##########
@@ -60,10 +65,10 @@ cdef class TriangleMesh:
     self.thisptr[0].repair()
   
   @cython.boundscheck(False)  
-  cpdef cnp.ndarray[cnp.float32_t, ndim=2] boundingBox(self):
+  cpdef cnp.ndarray[cnp.float64_t, ndim=2] boundingBox(self):
     cdef BoundingBoxf3 bb = self.thisptr[0].bounding_box()
     cdef cnp.npy_intp *retsize = [3,2]
-    cdef cnp.ndarray[cnp.float32_t, ndim=2] rbb = cnp.PyArray_EMPTY(2, retsize, cnp.NPY_FLOAT32, 0)
+    cdef cnp.ndarray[cnp.float64_t, ndim=2] rbb = cnp.PyArray_EMPTY(2, retsize, cnp.NPY_FLOAT64, 0)
     rbb[0,0] = bb.min.x
     rbb[1,0] = bb.min.y
     rbb[2,0] = bb.min.z
@@ -75,7 +80,7 @@ cdef class TriangleMesh:
   @cython.boundscheck(False)  
   def alignToCenter(self):
     "center in the plane XY, and rebase in Z so the model is in touching the XY plane, in the +Z half-space"
-    cdef cnp.ndarray[cnp.float32_t, ndim=2] bb = self.boundingBox()
+    cdef cnp.ndarray[cnp.float64_t, ndim=2] bb = self.boundingBox()
     cdef cnp.ndarray c  = np.sum(bb, axis=1)/2
     self.thisptr[0].translate(-c[0], -c[1], -bb[2,0])
   
@@ -105,12 +110,12 @@ cdef class TriangleMesh:
   def slicePlanes(self, double value, basestring mode='c', double startshift=NAN):
     """Simple slicing, with the parameter "mode" specifying either 'constant' z steps, or a 'fixed' number of steps.
     if specified, the parameter startshift is the height of the first slice"""
-    cdef cnp.ndarray[cnp.float32_t, ndim=2] bb = self.boundingBox()
+    cdef cnp.ndarray[cnp.float64_t, ndim=2] bb = self.boundingBox()
     cdef cnp.ndarray zs
     if mode[0]=='c': #'constant'
       if isnan(startshift):
         startshift = value
-      zs = np.arange(bb[2,0]+startshift,bb[2,1], value, dtype=np.float32)
+      zs = np.arange(bb[2,0]+startshift,bb[2,1], value, dtype=np.float64)
       if fabs(zs[-1]-bb[2,1])<np.spacing(bb[2,1]):
         zs = zs[:-1]
     elif mode[0]=='f':#'fixed'
@@ -118,24 +123,34 @@ cdef class TriangleMesh:
         zs = np.linspace(bb[2,0],bb[2,1], value+2)[1:-1]
       else:
         zs = np.linspace(bb[2,0]+startshift,bb[2,1], value, endpoint=False)
-      zs = zs.astype(np.float32)
+      zs = zs.astype(np.float64)
     else:
       raise ValueError('Invalid Slice Mode')
     return zs
     
   @cython.boundscheck(False)
-  def doslice(self, cnp.ndarray[cnp.float32_t, ndim=1] zs, double safety_offset=DEFAULT_SLICING_SAFETY_OFFSET):
+  def doslice(self, inputs, double safety_offset=DEFAULT_SLICING_SAFETY_OFFSET):
     """generate a sliced model of this mesh"""
     cdef int k, k1, sz, sz1
-    cdef vector[float] zsv
+    cdef vector[cnp.float32_t] zsv
+    cdef cnp.ndarray zs
     #we cannot allocate the object in the stack because cython requires it to have a contructor without args
     cdef TriangleMeshSlicer *slicer = new TriangleMeshSlicer(self.thisptr, DEFAULT_SLICING_SAFETY_OFFSET)
-    cdef SlicedModel layers = SlicedModel(zs.copy())
+    cdef SlicedModel layers
     try:
-      sz = zs.size
-      zsv.resize(sz)
-      for k in range(sz):
-        zsv[k] = zs[k]
+      if isinstance(inputs, np.ndarray):
+        zs       = inputs
+        sz       = zs.size
+        zsv.resize(sz)
+        for k in range(sz):
+          zsv[k] = zs[k]
+        layers   = SlicedModel(zs.astype(np.float64))
+      elif isinstance(inputs, Number):
+        zsv.resize(1)
+        zsv[0]   = inputs
+        layers   = SlicedModel(np.array(inputs, dtype=np.float64))
+      else:
+        raise ValueError('Invalid specification for z values')
       with nogil:
         slicer.slice(zsv, layers.thisptr)
       return layers

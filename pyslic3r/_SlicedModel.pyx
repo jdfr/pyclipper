@@ -106,10 +106,10 @@ cdef class SlicedModel:
     """expose the z values to python"""
     def __get__(self):
       return self.zvalues
-    def __set__(self, cnp.ndarray[cnp.float32_t, ndim=1] val):
+    def __set__(self, cnp.ndarray[cnp.float64_t, ndim=1] val):
       self.zvalues = val
 
-  def __cinit__(self, cnp.ndarray[cnp.float32_t, ndim=1] zvalues=None, bool doinit = True):
+  def __cinit__(self, cnp.ndarray[cnp.float64_t, ndim=1] zvalues=None, bool doinit = True):
     if doinit:
       self.thisptr = new SLICEDMODEL()
     self.zvalues = zvalues
@@ -393,7 +393,7 @@ cdef class SlicedModel:
       if asInteger:
         return Polygon2arrayI(pol)
       else:
-        return Polygon2arrayF(pol)*SCALING_FACTOR
+        return Polygon2arrayF(pol)
 
   @cython.boundscheck(False)  
   def contour(self, unsigned int nlayer, unsigned int nExpolygon, bool asInteger=False, bool asView=False):
@@ -433,15 +433,16 @@ def mergeSlicedModels(inputs, double mergeTolerance = 0.0):
   unexpected errors will likely follow"""
   
   #convert the input to a list
-  cdef unsigned int inew, nmodels, allsizes, reservesize, k, idxlowest, numToMerge
+  cdef unsigned int inew, nmodels, reservesize, k, idxlowest, numToMerge
+  cdef cnp.npy_intp allsizes
   cdef bool goon
   cdef double lowest, val
-  cdef cnp.ndarray[cnp.float32_t, ndim=1] newzs
+  cdef cnp.ndarray[cnp.float64_t, ndim=1] newzs
   cdef SLICEDMODEL *newptr = new SLICEDMODEL()
   cdef vector[int] numlayerss, idxs
   cdef vector[bool] ended, toMerge
-  cdef vector[float] currentzs
-  cdef vector[float*] zvaluess
+  cdef vector[cnp.float64_t] currentzs
+  cdef vector[cnp.float64_t*] zvaluess
   cdef vector[SLICEDMODEL*] thisptrs
   cdef SlicedModel model
   
@@ -461,7 +462,7 @@ def mergeSlicedModels(inputs, double mergeTolerance = 0.0):
     model         = inputs[k]
     if not model.slicesAreOrdered():
       raise Exception('model %d is not ordered!' % k)
-    zvaluess[k]   = <float*>model.zvalues.data
+    zvaluess[k]   = <cnp.float64_t*>model.zvalues.data
     thisptrs[k]   = model.thisptr
     numlayerss[k] = model.thisptr[0].size()
     allsizes     += numlayerss[k]
@@ -469,7 +470,7 @@ def mergeSlicedModels(inputs, double mergeTolerance = 0.0):
     ended[k]      = numlayerss[k]==0
 
   newptr[0].reserve(allsizes)
-  newzs     = np.empty((allsizes,), dtype=np.float32)
+  newzs     = cnp.PyArray_EMPTY(1, &allsizes, cnp.NPY_FLOAT64, 0)
   inew      = 0
   #make sure that we start the main loop only if we are going to do some work
   goon      = allsizes>0
@@ -578,7 +579,7 @@ def layersAsTriangleMesh(SlicedModel model):
   cdef cnp.ndarray[cnp.float64_t, ndim=2] points
   cdef cnp.ndarray[cnp.int64_t, ndim=2] triangles
   cdef unsigned int numP, numV, k1, k2, k3, k4, kp#, kt
-  cdef cnp.ndarray[cnp.float32_t, ndim=1] zvalues = model.zvalues
+  cdef cnp.ndarray[cnp.float64_t, ndim=1] zvalues = model.zvalues
   cdef bool ok = True
   kp = 0
   #kt = 0
@@ -617,7 +618,7 @@ cdef void writeAsSVG(SlicedModel model, basestring filename):
   cdef double z, cx, cy, dx, dy, sx, sy
   cdef char space
   cdef FILE *f = fopen(filename, "w")
-  cdef cnp.ndarray[cnp.float32_t, ndim=1] zvalues = model.zvalues
+  cdef cnp.ndarray[cnp.float64_t, ndim=1] zvalues = model.zvalues
   cx, cy, dx, dy = computeSlicedModelBBParams(model)
   sx = cx-dx/2
   sy = cy-dy/2
@@ -661,7 +662,7 @@ cdef void writeAsPLY(SlicedModel model, basestring filename):
   cdef double z
   cdef FILE *f
   cdef unsigned int count = 0
-  cdef cnp.ndarray[cnp.float32_t, ndim=1] zvalues = model.zvalues
+  cdef cnp.ndarray[cnp.float64_t, ndim=1] zvalues = model.zvalues
   polss = triangulateAllLayers(model)
   try:
     f = fopen(filename, "w")
@@ -876,14 +877,14 @@ cdef class SliceCollection:
   def toSlicedModel(self, SlicedModel model=None):
     """convert a SliceCollection back to a slicedModel.
     WARNING: the arrays must still be of type int64, otherwise the conversion will fail!"""
-    cdef unsigned int length = len(self._slices)
+    cdef cnp.npy_intp length = len(self._slices)
     cdef unsigned int nlayer, nexp, nhole, npoint, lenexps, lenholes, lenpoints
     cdef Layer layer
     cdef list exps, holes
     cdef ExPolygon exp
     cdef Polygon *pol
     cdef cnp.ndarray[dtype=cnp.int64_t, ndim=2] array
-    cdef cnp.ndarray zs = np.empty((length,), dtype=np.float32)
+    cdef cnp.ndarray zs = cnp.PyArray_EMPTY(1, &length, cnp.NPY_FLOAT64, 0)
     if model is None:
       model                       = SlicedModel(zs, True)
     else:
@@ -947,8 +948,8 @@ cdef cnp.ndarray[dtype=cnp.float64_t, ndim=2] Polygon2arrayF(Polygon *pol):
   cdef cnp.ndarray[dtype=cnp.float64_t, ndim=2] parr = np.empty((sz, 2), dtype=np.float64)
   #this may be wrapped with nogil, but it is probably not worth to do it so frequently
   for k in range(sz):
-    parr[k,0] = points[k].x
-    parr[k,1] = points[k].y
+    parr[k,0] = points[k].x*SCALING_FACTOR
+    parr[k,1] = points[k].y*SCALING_FACTOR
   return parr
 
 #strides have to be computed just once
