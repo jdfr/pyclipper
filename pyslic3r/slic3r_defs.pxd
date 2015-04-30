@@ -161,7 +161,7 @@ cdef extern from "libslic3r/ClipperUtils.hpp" namespace "Slic3r" nogil:
 
   void diff [SubjectType, ResultType](const SubjectType &subject, const ExPolygons &clip, ResultType* retval, bool safety_offset_, bool eraseOutput) except + 
   void diff [SubjectType, ResultType](const SubjectType &subject, const   Polygons &clip, ResultType* retval, bool safety_offset_, bool eraseOutput) except + 
-  
-cdef extern from "glue.hpp" nogil:
-  void mydiff(const ExPolygons &subject, const Polygons &clip, ExPolygons* retval, bool safety_offset_, bool eraseOutput) except +  #version with implicit paramenters
 
+  #to work around a cython bug (trac.cython.org/ticket/848), we instantiate templates to be used within nogil
+  void diff (const ExPolygons &subject, const Polygons &clip, ExPolygons* retval, bool safety_offset_, bool eraseOutput) except + 
+  

@@ -120,10 +120,10 @@ cdef class SlicedModel:
   #quick and dirty (data is copied twice) pickle protocol
   #TODO: add support to load/save the data directly without intermediate structures like here
   def __reduce__(self):
-    d = {'state': self.toLayerList(asView=True)}
+    d = {'state': self.toSliceCollection(asView=True)}
     return (SlicedModel, (), d)
   def __setstate__(self, d):
-    layerList2SlicedModel(d['state'], self)
+    d['state'].toSlicedModel(self)
     
   cdef bool slicesAreOrdered(self):
     return (np.diff(self.zvalues)>=0).all()
@@ -207,11 +207,21 @@ cdef class SlicedModel:
     else:
       raise Exception('mode not understood: '+mode)
       
-  @cython.boundscheck(False)  
+  @cython.boundscheck(False)
+  def toSliceCollection(self, bool asInteger=False, bool asView=False, rang=None):
+    """Same as toLayerList, but returns the list of layers wrapped in a SliceCollection
+    object. This will be useful if SliceCollection acquires more attributes,
+    for example if SCALING_FACTOR is un-hardcoded and moved to SlicedModel"""
+    if isinstance(rang, int):
+      rang = slice(rang, rang+1, 1)
+    return SliceCollection(self.toLayerList(asInteger, asView, rang))
+      
+  @cython.boundscheck(False)
   cpdef object toLayerList(self, bool asInteger=False, bool asView=False, rang=None):
-    """return a full-fledged pythonic representation of this SlicedModel object.
-    
-    This representation is a list of Layer objects.
+    """return a full-fledged pythonic representation of the layers of this
+    SlicedModel object, as a list of Layer objects (all attributes fully pythonic,
+    so it is easier to manipulate in python (removing and adding things
+    arbitrarily).
     
     Each Layer object has a z value and a list of ExPolygon objects.
     
@@ -219,7 +229,7 @@ cdef class SlicedModel:
     i.e., there are no contours within the holes (however, nesting is implemented
     in practice as a list of logically unrelated but geometrically nested ExPolygons).
     
-    Each ExPolygons has a contour and a list of holes.
+    Each ExPolygon has a contour and a list of holes.
     
     Contours and holes are numpy arrays of 2d points, each one representing a
     polygon."""
@@ -304,6 +314,7 @@ cdef class SlicedModel:
     cdef bool asi = True
     cdef bool asv = True
     if isinstance(val, int) or isinstance(val, slice):
+      #we use toLayerList instead of toSliceCollection to avoid an useless indirection layer
       return self.toLayerList(asi, asv, val)
     elif isinstance(val, tuple):
       ndims = len(val)
@@ -824,55 +835,93 @@ cdef class Layer:
   def __repr__(self):
     return "".join(("Layer(z=", self._z.__repr__(), ", expolygons=", self._expolygons.__repr__(), ")"))
 
-@cython.boundscheck(False)
-def layerList2SlicedModel(list layers, SlicedModel model=None):
-  """convert a list of layers back to a slicedModel. WARNING: the arrays must still be of type int64"""
-  cdef unsigned int length = len(layers)
-  cdef unsigned int nlayer, nexp, nhole, npoint, lenexps, lenholes, lenpoints
-  cdef Layer layer
-  cdef list exps, holes
-  cdef ExPolygon exp
-  cdef Polygon *pol
-  cdef cnp.ndarray[dtype=cnp.int64_t, ndim=2] array
-  cdef cnp.ndarray zs = np.empty((length,), dtype=np.float32)
-  if model is None:
-    model                       = SlicedModel(zs, True)
-  else:
-    model.thisptr[0].clear()
-    model.zvalues               = zs
-  model.thisptr[0].resize(length)
-  #for each layer
-  for nlayer in range(length):
-    layer                         = layers[nlayer]
-    model.zvalues[nlayer]         = layer._z
-    exps                          = layer._expolygons
-    lenexps                       = len(exps)
-    model.thisptr[0][nlayer].resize(lenexps)
-    #for each expolygon
-    for nexp in range(lenexps):
-      exp                         = exps[nexp]
-      array                       = exp._contour
-      lenpoints                   = array.shape[0]
-      pol                         = &model.thisptr[0][nlayer][nexp].contour
-      pol[0].points.resize(lenpoints)
-      #for each point in the contour
-      for npoint in range(lenpoints):
-        pol[0].points[npoint].x   = array[npoint,0]
-        pol[0].points[npoint].y   = array[npoint,1]
-      holes                       = exp._holes      
-      lenholes                    = len(holes)
-      model.thisptr[0][nlayer][nexp].holes.resize(lenholes)
-      #for each hole
-      for nhole in range(lenholes):
-        array                     = holes[nhole]
-        lenpoints                 = array.shape[0]
-        pol                       = &model.thisptr[0][nlayer][nexp].holes[nhole]
+cdef class SliceCollection:
+  """This class is the translation of SlicedModel to Python. It has been added
+  in prevision that it might be needed in the future. It will be useful if more
+  cdef attributes are added to SlicedModel (for example, if SCALING_FACTOR is
+  un-hardcoded and becomes an attribute of SlicedModel)"""
+  cdef list   _slices
+
+  property slices:
+    def __get__(self):
+      return self._slices
+    def __set__(self,list val):
+      self._slices = val
+
+  def __cinit__(self, list slices=None, *args, **kwargs):
+    self._slices = slices
+
+  #pickle protocol
+  def __reduce__(self):
+    d = {'_slices': self._slices}
+    return (SliceCollection, (), d)
+  def __setstate__(self, d):
+    self._slices = d['_slices']
+    
+  def __len__(self):
+    return len(self._slices)
+
+  def __getitem__(self, val):
+    return self._slices.__getitem__(val)
+
+  #Do not implement __setitem__, since this object's data may belong to a SlicedModel,
+  #while we may manage to implement it, it is best to avoid unnecessary complexities 
+  
+  def __str__(self):
+    return "".join(("SliceCollection(", self._slices.__str__(),  ")"))
+  def __repr__(self):
+    return "".join(("SliceCollection(", self._slices.__repr__(), ")"))
+
+  @cython.boundscheck(False)
+  def toSlicedModel(self, SlicedModel model=None):
+    """convert a SliceCollection back to a slicedModel.
+    WARNING: the arrays must still be of type int64, otherwise the conversion will fail!"""
+    cdef unsigned int length = len(self._slices)
+    cdef unsigned int nlayer, nexp, nhole, npoint, lenexps, lenholes, lenpoints
+    cdef Layer layer
+    cdef list exps, holes
+    cdef ExPolygon exp
+    cdef Polygon *pol
+    cdef cnp.ndarray[dtype=cnp.int64_t, ndim=2] array
+    cdef cnp.ndarray zs = np.empty((length,), dtype=np.float32)
+    if model is None:
+      model                       = SlicedModel(zs, True)
+    else:
+      model.thisptr[0].clear()
+      model.zvalues               = zs
+    model.thisptr[0].resize(length)
+    #for each layer
+    for nlayer in range(length):
+      layer                         = self._slices[nlayer]
+      model.zvalues[nlayer]         = layer._z
+      exps                          = layer._expolygons
+      lenexps                       = len(exps)
+      model.thisptr[0][nlayer].resize(lenexps)
+      #for each expolygon
+      for nexp in range(lenexps):
+        exp                         = exps[nexp]
+        array                       = exp._contour
+        lenpoints                   = array.shape[0]
+        pol                         = &model.thisptr[0][nlayer][nexp].contour
         pol[0].points.resize(lenpoints)
-        #for each point in the hole
+        #for each point in the contour
         for npoint in range(lenpoints):
-          pol[0].points[npoint].x = array[npoint,0]
-          pol[0].points[npoint].y = array[npoint,1]
-  return model
+          pol[0].points[npoint].x   = array[npoint,0]
+          pol[0].points[npoint].y   = array[npoint,1]
+        holes                       = exp._holes      
+        lenholes                    = len(holes)
+        model.thisptr[0][nlayer][nexp].holes.resize(lenholes)
+        #for each hole
+        for nhole in range(lenholes):
+          array                     = holes[nhole]
+          lenpoints                 = array.shape[0]
+          pol                       = &model.thisptr[0][nlayer][nexp].holes[nhole]
+          pol[0].points.resize(lenpoints)
+          #for each point in the hole
+          for npoint in range(lenpoints):
+            pol[0].points[npoint].x = array[npoint,0]
+            pol[0].points[npoint].y = array[npoint,1]
+    return model
       
       
 
