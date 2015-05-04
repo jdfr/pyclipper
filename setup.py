@@ -46,7 +46,7 @@ shutil.copyfile('./%s/%s' % (libpath, libname), './%s/%s' % (dirname, libname))
 
 #disable these horribly annoying warnings
 (opt,) = get_config_vars('OPT')
-opt += ' -Wno-unused-local-typedefs'
+opt += ' -Wno-unused-local-typedefs -Wno-unused-function'
 os.environ['OPT'] = " ".join(
     flag for flag in opt.split() if flag != '-Wstrict-prototypes'
 )
