@@ -70,10 +70,11 @@ extension_template = lambda name: Extension(
 )
 
 
-# build "pyslic3r.so" python extension to be added to "PYTHONPATH" afterwards...
-setup(
-    cmdclass    = {'build_ext': build_ext},
-    description = "Python wrapper for Scli3r C++ library",
-    packages    = [dirname],
-    ext_modules = [extension_template(name) for name in pynames]
-)           
+if __name__ == "__main__":
+  # build "pyslic3r.so" python extension to be added to "PYTHONPATH" afterwards...
+  setup(
+      cmdclass    = {'build_ext': build_ext},
+      description = "Python wrapper for Scli3r C++ library",
+      packages    = [dirname],
+      ext_modules = [extension_template(name) for name in pynames]
+  )           

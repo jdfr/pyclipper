@@ -16,12 +16,12 @@
 import os
 import shutil
 
-pynames = ["_pyslic3r"]
+import setup
 
 # clean previous build
 for root, dirs, files in os.walk(".", topdown=False):
     for name in files:
-      for pyname in pynames:
+      for pyname in setup.pynames: #get list of modules from setup.py
         if (name.startswith(pyname) and not(name.endswith(".pyx") or name.endswith(".pxd"))):
             os.remove(os.path.join(root, name))
     for name in dirs:
