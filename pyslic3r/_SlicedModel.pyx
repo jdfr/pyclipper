@@ -780,16 +780,12 @@ cdef class ExPolygon:
   cdef list        _holes
 
   property contour:
-    def __get__(self):
-      return self._contour
-    def __set__(self, cnp.ndarray val):
-      self._contour = val
+    def __get__(self):                  return self._contour
+    def __set__(self, cnp.ndarray val): self._contour = val
 
   property holes:
-    def __get__(self):
-      return self._holes
-    def __set__(self, list val):
-      self._holes = val
+    def __get__(self):                  return self._holes
+    def __set__(self, list        val): self._holes = val
   
   def __cinit__(self, cnp.ndarray c=None, list hs=None, *args, **kwargs):
     self._contour = c
@@ -814,16 +810,12 @@ cdef class Layer:
   cdef list   _expolygons
 
   property z:
-    def __get__(self):
-      return self._z
-    def __set__(self,double val):
-      self._z = val
+    def __get__(self):            return self._z
+    def __set__(self,double val): self._z = val
 
   property expolygons:
-    def __get__(self):
-      return self._expolygons
-    def __set__(self, list val):
-      self._expolygons = val
+    def __get__(self):            return self._expolygons
+    def __set__(self, list  val): self._expolygons = val
   
   def __cinit__(self, double z=0.0, list exp=None, *args, **kwargs):
     self._z          = z
@@ -837,13 +829,9 @@ cdef class Layer:
     self._z          = d['_z']
     self._expolygons = d['_exps']
     
-  def __len__(self):
-    return len(self._expolygons)
-  def __iter__(self):
-    return self._slices.__iter__()
-
-  def __getitem__(self, val):
-    return self._expolygons.__getitem__(val)
+  def __len__(self):          return len(self._expolygons)
+  def __iter__(self):         return self._slices.__iter__()
+  def __getitem__(self, val): return self._expolygons.__getitem__(val)
 
   #Do not implement __setitem__, since this object's data may belong to a SlicedModel,
   #while we may manage to implement it, it is best to avoid unnecessary complexities 
@@ -861,10 +849,8 @@ cdef class SliceCollection:
   cdef list   _slices
 
   property slices:
-    def __get__(self):
-      return self._slices
-    def __set__(self,list val):
-      self._slices = val
+    def __get__(self):          return self._slices
+    def __set__(self,list val): self._slices = val
 
   def __cinit__(self, list slices=None, *args, **kwargs):
     self._slices = slices
@@ -873,16 +859,11 @@ cdef class SliceCollection:
   def __reduce__(self):
     d = {'_slices': self._slices}
     return (SliceCollection, (), d)
-  def __setstate__(self, d):
-    self._slices = d['_slices']
     
-  def __len__(self):
-    return len(self._slices)
-  def __iter__(self):
-    return self._slices.__iter__()
-
-  def __getitem__(self, val):
-    return self._slices.__getitem__(val)
+  def __setstate__(self, d):    self._slices = d['_slices']
+  def __len__(self):            return len(self._slices)
+  def __iter__(self):           return self._slices.__iter__()
+  def __getitem__(self, val):   return self._slices.__getitem__(val)
 
   #Do not implement __setitem__, since this object's data may belong to a SlicedModel,
   #while we may manage to implement it, it is best to avoid unnecessary complexities 
