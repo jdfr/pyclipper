@@ -45,7 +45,9 @@ set(MASK "/*.c*") #*.c, *.cc, *.cpp
 set(SRC ${CMAKE_CURRENT_SOURCE_DIR}/Slic3r/xs/src)
 file(GLOB_RECURSE poly2tri_c  "${SRC}/poly2tri${MASK}") 
 file(GLOB_RECURSE admesh_c    "${SRC}/admesh${MASK}")
+set(clipper_source "${SRC}/clipper.cpp") #clipper goes into its own library
 file(GLOB         slic3r1_c   "${SRC}${MASK}")
+list(REMOVE_ITEM  slic3r1_c   ${clipper_source})
 if (FULLLIBRARY)
   file(GLOB_RECURSE slic3r2_c "${SRC}/libslic3r${MASK}")
 else()
@@ -57,12 +59,12 @@ else()
   endforeach()
 endif()
 
-set(c_sources ${admesh_c} ${slic3r1_c} ${slic3r2_c})
+set(slic3r_sources ${admesh_c} ${slic3r1_c} ${slic3r2_c})
 
 if (FULLLIBRARY OR NOT DONOTUSEPOLY2TRI)
-  set(c_sources ${c_sources} ${poly2tri_c})
+  set(slic3r_sources ${slic3r_sources} ${poly2tri_c})
 endif()
-set(SOURCES ${c_sources} )
+set(SOURCES ${slic3r_sources} )
 
 set(CONFIGH Slic3r-include) #add silly config.h dependency in one of Slic3r's subprojects
 set (slic3r_INCLUDE_DIRS ${CONFIGH} ${SRC} ${SRC}/admesh ${SRC}/boost ${SRC}/libslic3r ${SRC}/poly2tri)
@@ -78,7 +80,7 @@ if (DONOTUSEPOLY2TRI)
   ADD_DEFINITIONS(-DNOPOLYT2RI)
 endif()
 
-#foreach(file ${c_sources})
+#foreach(file ${slic3r1_c})
 #  message(STATUS "file='${file}'")
 #endforeach()
 ## to see the include directories
@@ -87,8 +89,10 @@ endif()
 #  message(STATUS "dir='${dir}'")
 #endforeach()
 
-ADD_LIBRARY(slic3rlib SHARED ${c_sources})
-#ADD_LIBRARY(slic3rlib STATIC ${c_sources})
+ADD_LIBRARY(clipper SHARED ${clipper_source})
+ADD_LIBRARY(slic3rlib SHARED ${slic3r_sources})
+target_link_libraries(slic3rlib clipper)
+#ADD_LIBRARY(slic3rlib STATIC ${slic3r_sources})
 
 get_filename_component(BASEPATH ${CMAKE_CURRENT_LIST_FILE} DIRECTORY)
 set (CMAKE_INSTALL_PREFIX "${BASEPATH}/../..")
