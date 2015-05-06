@@ -23,6 +23,15 @@ CMAKE_MINIMUM_REQUIRED(VERSION 2.6.0)
 
 set(SRC ${CMAKE_CURRENT_SOURCE_DIR}/Slic3r/xs/src)
 
+#check if the Slic3r source is present, download it otherwise
+if (NOT EXISTS ${SRC})
+  #we now execute a git command. cmake has a directive to build external projects (ExternalProject_Add)
+  #that can do this, but it does so at building time, while we need to download the source at cmake time
+  execute_process(COMMAND git clone https://github.com/jdfr/Slic3r.git
+                  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+endif()
+
+
 PROJECT(slic3rlib)
 
 SET(CMAKE_BUILD_TYPE "Release" CACHE STRING "Release type")
