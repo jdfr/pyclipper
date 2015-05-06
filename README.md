@@ -33,9 +33,9 @@ python setup.py build_ext --inplace
 
 ## Porting to other systems
 
-The use of cmake should make it rather easy to compile slic3r's C++ library in Windows: just run the cmake GUI to generate a Visual Studio project to compile the library. the CMakeLists.txt is configured to generate a static library because it is easier to use in development in that way. However, the proper way to do it is probably to generate a shared library. 
+The use of cmake should make it rather easy to compile slic3r's C++ library in Windows: just run the cmake GUI to generate a Visual Studio project to compile the library.
 
-Currently, setup.py is hardcoded to link the slic3r library generated in slic3r-build into the cython bindings. It should probably work out of the box in other distros. Porting to windows should be easy.
+Unfotunately, Slic3r's C++ core has not been coded with Windows portability in mind, because Perl compiles it in CygWin.
 
 ## Notes
 
