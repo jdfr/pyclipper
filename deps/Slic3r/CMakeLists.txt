@@ -13,12 +13,15 @@
 # License along with this file. You may obtain a copy of the License at
 # http://www.gnu.org/licenses/agpl-3.0.txt
 
-#to build our dependency on Slic3r's C++ library, change to directory Slic3r-build and do
+#this file is called from the main CMakeLists.txt in the root directory, but can also be called
+#standalone from the directory deps/Slic3r/cmakebuild. In that directory, do
 #    cmake ..
-#if cmake does not complain, you can then build the project with
+#then, if cmake does not complain, you can then build the project with
 #    make
 
 CMAKE_MINIMUM_REQUIRED(VERSION 2.6.0)
+
+set(SRC ${CMAKE_CURRENT_SOURCE_DIR}/Slic3r/xs/src)
 
 PROJECT(slic3rlib)
 
@@ -42,7 +45,6 @@ option(DONOTUSEPOLY2TRI  "disable functions that require the use of poly2tri" ON
 option(FULLLIBRARY       "include all sources in the library" OFF)
 
 set(MASK "/*.c*") #*.c, *.cc, *.cpp
-set(SRC ${CMAKE_CURRENT_SOURCE_DIR}/Slic3r/xs/src)
 file(GLOB_RECURSE poly2tri_c  "${SRC}/poly2tri${MASK}") 
 file(GLOB_RECURSE admesh_c    "${SRC}/admesh${MASK}")
 set(clipper_source "${SRC}/clipper.cpp") #clipper goes into its own library
@@ -66,7 +68,7 @@ if (FULLLIBRARY OR NOT DONOTUSEPOLY2TRI)
 endif()
 set(SOURCES ${slic3r_sources} )
 
-set(CONFIGH Slic3r-include) #add silly config.h dependency in one of Slic3r's subprojects
+set(CONFIGH externalincludes) #add silly config.h dependency in one of Slic3r's subprojects
 set (slic3r_INCLUDE_DIRS ${CONFIGH} ${SRC} ${SRC}/admesh ${SRC}/boost ${SRC}/libslic3r ${SRC}/poly2tri)
 include_directories(${slic3r_INCLUDE_DIRS})
 
