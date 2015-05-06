@@ -20,22 +20,32 @@
 import build as b
 
 
-basepath = '.'
+basepath        = '.'
 
 #directory (and name) of the Cython library
-dirname = "pyslic3r"
+dirname         = "pyslic3r"
 
 #path of the slic3r C++ library
-libpath = 'deps/Slic3r/Slic3r-build'
+libpath         = 'deps/Slic3r/cmakebuild'
+
+#path to the slic3r C++ library at runtime
+runtimelibdirs  = ["$ORIGIN"]
 
 #Cython modules
-pynames = ["_SlicedModel", "_TriangleMesh"]
+pynames         = ["_SlicedModel", "_TriangleMesh"]
 
-additionalIncludes = ''
+#compose the names of the libraries at link time
+libraries       = b.external_libraries(dirname, b.libnamesLD)
 
-libraries = b.external_libraries(dirname, b.libnamesLD)
+description     = "Python wrapper for Scli3r C++ library"
 
-b.copy_external_libraries(libpath, dirname, b.libnamesLD)
+additionalSetup = {'package_data': {dirname: b.libnames(b.libnamesLD)} }
 
-b.dobuild(b.opt, basepath, b.includepaths, dirname, libraries, pynames, {})
+additionalExts  = {}
+
+if __name__ == "__main__":
+
+  b.copy_external_libraries(basepath, libpath, dirname, b.libnamesLD)
+  
+  b.dobuild(b.opt, basepath, b.includepaths, dirname, description, runtimelibdirs, libraries, pynames, additionalSetup, additionalExts)
 
