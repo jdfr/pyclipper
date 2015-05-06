@@ -16,26 +16,23 @@ slic3r is one of the best open source slicers out there, and has a big, high-qua
 
 # Compiling
 
-This code has been tested only on debian sid, but it should also work in other distros. To compile on windows, only minor changes should be needed.
+This code has been tested only on debian sid, but it should also work in other distros. To compile on windows, cygwin is needed.
 
-Slic3r has to be checked out to `./deps/Slic3r/Slic3r`. To compile slic3r's C++ library, go to `./deps/Slic3r/Slic3r-build` and do:
+This code has as dependency a (minimally) patched version of Slic3r, which is cloned in deps/Slic3r/Slic3r by cmake.
+
+To compile both Slic3r's C++ core and the cython bindings, do the following:
 
 ```bash
+cd cmakebuild
 cmake ..
 make
 ```
 
-Then, go to the base directory and do:
-
-```bash
-python setup.py build_ext --inplace
-```
-
 ## Porting to other systems
 
-The use of cmake should make it rather easy to compile slic3r's C++ library in Windows: just run the cmake GUI to generate a Visual Studio project to compile the library.
+Unfortunately, Slic3r's C++ core has not been coded with Windows portability in mind (it does use the LP64 data model, and Visual Studio complains on many std calls, among other issues), because Perl compiles it in CygWin.
 
-Unfotunately, Slic3r's C++ core has not been coded with Windows portability in mind, because Perl compiles it in CygWin.
+Clipper, on the other hand, is fully portable.
 
 ## Notes
 
