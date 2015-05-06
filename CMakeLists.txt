@@ -49,3 +49,8 @@ add_custom_target(pyslic3r ALL
                   COMMENT "Building pyslic3r's cython extensions..."
                   VERBATIM)
 
+add_custom_target(pyclean
+                  COMMAND python clearbuild.py
+                  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                  COMMENT "Removing pyslic3r's cython extensions..."
+                  VERBATIM)
