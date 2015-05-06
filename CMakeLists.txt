@@ -31,3 +31,21 @@ PROJECT(pyslic3r)
 
 SET(CMAKE_BUILD_TYPE "Release" CACHE STRING "Release type")
 
+set(pydir ${CMAKE_CURRENT_SOURCE_DIR}/pyslic3r)
+
+set(inputs clipper slic3rlib)
+
+set(sourcefiles _SlicedModel _TriangleMesh)
+set(outputs "")
+foreach(f ${sourcefiles})
+  list(APPEND outputs ${pydir}/${f}.so)
+  list(APPEND  inputs ${pydir}/${f}.pyx)
+endforeach()
+
+add_custom_target(pyslic3r ALL
+                  COMMAND python setup.py build_ext --inplace
+                  DEPENDS ${inputs}
+                  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                  COMMENT "Building pyslic3r's cython extensions..."
+                  VERBATIM)
+
