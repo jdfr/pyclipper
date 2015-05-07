@@ -33,7 +33,7 @@ libpath         = 'deps/Slic3r/cmakebuild'
 runtimelibdirs  = ["$ORIGIN"]
 
 #Cython modules
-pynames         = ["_SlicedModel", "_TriangleMesh"]
+pynames         = ["_SlicedModel", "_TriangleMesh", "_Clipper"]
 
 #compose the names of the libraries at link time
 libraries       = b.external_libraries(dirname, b.libnamesLD)
