@@ -13,6 +13,7 @@
 # License along with this file. You may obtain a copy of the License at
 # http://www.gnu.org/licenses/agpl-3.0.txt
 
+
 # python setup.py build_ext --inplace
 
 #for this script to work properly, the Slic3r c++ libraries must have been compiled in ./deps/Slic3r/Slic3r-build
@@ -39,7 +40,7 @@ libraries       = b.external_libraries(dirname, b.libnamesLD)
 
 description     = "Python wrapper for Scli3r C++ library"
 
-additionalSetup = {'package_data': {dirname: b.libnames(b.libnamesLD)} }
+additionalSetup = {'package_data': {dirname: b.instantiate_libnames(b.libnamesLD)} }
 
 additionalExts  = {}
 

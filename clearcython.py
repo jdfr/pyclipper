@@ -13,8 +13,16 @@
 # License along with this file. You may obtain a copy of the License at
 # http://www.gnu.org/licenses/agpl-3.0.txt
 
+
 import build
 import setup
 
-build.doClean(setup)
- 
+#clean *.pyc, and cython build files
+build.doClean(setup.dirname,
+              setup.pynames)
+
+#remove *.so libraries
+build.remove_external_libraries(setup.basepath,
+                                setup.dirname,
+                                build.libnamesLD)
+

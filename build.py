@@ -33,7 +33,8 @@ from Cython.Distutils import build_ext
 libnamesLD = ["clipper", "slic3rlib"] # to link dynamically: refers to "libslic3rlib.so"
 
 #file name of the slic3r C++ library
-libnames = lambda libnamesLD: ['lib%s.so' % x for x in libnamesLD]
+def instantiate_libnames(libnamesLD):
+  return ['lib%s.so' % x for x in libnamesLD]
 
 
 #disable these horribly annoying warnings
@@ -70,11 +71,19 @@ def extension_template(name, dirname, runtimelibdirs, libraries, includes, addit
     **additional
   )
 
+def libraries_addpath(basepath, path, libnamesLD):
+  for libname in instantiate_libnames(libnamesLD):
+    yield '%s/%s/%s' % (basepath, path, libname)
 
 def copy_external_libraries(basepath, libpath, dirname, libnamesLD):
   #copy Scli3r c++ library (it should have been build with cmake)
-  for libname in libnames(libnamesLD):
-    shutil.copyfile('%s/%s/%s' % (basepath, libpath, libname), '%s/%s/%s' % (basepath, dirname, libname))
+  for origpath, destpath in zip(libraries_addpath(basepath, libpath, libnamesLD),
+                                libraries_addpath(basepath, dirname, libnamesLD)):
+    shutil.copyfile(origpath, destpath)
+
+def remove_external_libraries(basepath, dirname, libnamesLD):
+  for removepath in libraries_addpath(basepath, dirname, libnamesLD):
+    os.remove(removepath)
 
 def dobuild(opt, basepath, includepaths, dirname, description, runtimelibdirs, libraries, pynames, additionalSetup, additionalExtensions):
   os.environ['OPT'] = opt
@@ -89,16 +98,39 @@ def dobuild(opt, basepath, includepaths, dirname, description, runtimelibdirs, l
       **additionalSetup
   )           
 
-# clean previous build
-def doClean(setupmodule):
-  directory = setupmodule.dirname #this assumes that we are executing from dirname's base directory 
-  pynames   = setupmodule.pynames #get list of extension modules from setup.py
-  for name in os.listdir(directory):
-    absname = op.join(directory, name)
+
+def erasedircontents(basedir):
+  for name in os.listdir(basedir):
+    absname = op.join(basedir, name)
     if op.isfile(absname):
-      for pyname in pynames: 
-        if (name.startswith(pyname) and not(name.endswith(".pyx") or name.endswith(".pxd"))):
-          print "Removing file "+absname
-          os.remove(absname)
+      os.remove(absname)
+    else:
+      shutil.rmtree(absname)
+
+# clean previous build
+def doClean(dirname, pynames):
+  
+  #remove ../build
+  superbuild = op.join(dirname, '../build')
+  if op.isdir(superbuild):
+    shutil.rmtree(superbuild)
+    
+  basedir = op.abspath(op.join(dirname, '..'))
+  #remove ../*.pyc
+  for name in os.listdir(basedir):
+    if name.endswith(".pyc"):
+      os.remove(op.join(basedir, name))
+  
+  for name in os.listdir(dirname):
+    absname  = op.join(dirname, name)
+    if op.isfile(absname):
+      toRemove = ( name.endswith(".pyc") or  #remove *.pyc
+                   any(   name.startswith(pyname) and #remove ./*.pyc and ./{CYTHONMODULE}.{so, cpp}
+                          not any(name.endswith(x) for x in [".pyx", ".pxd", ".pxi"])
+                        for pyname in pynames) )
+      if toRemove:
+        print "Removing file "+absname
+        os.remove(absname)
+    #remove ./build
     elif op.isdir(absname) and (name == "build"):
-      shutil.rmtree(name)
+      shutil.rmtree(absname)
