@@ -19,6 +19,9 @@ from slic3r_defs cimport *
 
 from libc.stdio cimport *
 
+cimport  Clipper as  c
+cimport _Clipper as _c
+
 from numpy.math cimport INFINITY#, NAN, isnan
 
 #np.import_array()
@@ -116,6 +119,10 @@ cdef class SlicedModelIterator:
 cdef class SlicedModel:
   """wrapper for the Slic3r data structure for a list of sliced layers"""
   
+  ########################################################################
+  #SPECIAL METHODS
+  ########################################################################
+  
   property zvals:
     """expose the z values to python"""
     def __get__(self):
@@ -139,88 +146,123 @@ cdef class SlicedModel:
   def __setstate__(self, d):
     d['state'].toSlicedModel(self)
     
-  cdef bool slicesAreOrdered(self):
-    return (np.diff(self.zvalues)>=0).all()
+  def __len__(self):
+    return self.thisptr[0].size()
+  def __iter__(self):
+    return SlicedModelIterator(self)
   
-  #nogil SHOULD BE ALLOWED IN THE DEFINITIONS OF THE _removeXXX methods, BUT
-  #WE CANNOT PUT IT BECAUSE OF A WEIRD CYTHON BUG (COMPILATION FAILS, COMPLAINING  
-  #IN THE ARGUMENT LIST OF .remove(): "Converting to Python object not allowed without gil"
-  
-  @cython.boundscheck(False)  
-  cdef void _removeLayers(self, unsigned int init, unsigned int end) nogil:
-    cdef vector[ExPolygons].iterator it = self.thisptr[0].begin()
-    self.thisptr[0].erase(it+init, it+end)
+  def __getitem__(self, val):
+    """rich but incomplete multidimension slicing support.
     
-  @cython.boundscheck(False)  
-  def removeLayers(self, unsigned int init, unsigned int end):
-    """remove a range of layers"""
-    _rangecheck(init, end, self.thisptr[0].size())
-    self._remove(init, end)
+    This object represents a list of layers. Each layer has a z value and a
+    list of expolygons. Each expolygon has a contour and a list of holes.
+    Both contours and holes are lists of int64 points.
     
-  @cython.boundscheck(False)  
-  cdef void _removeExPolygons(self, unsigned int nlayer, unsigned int init, unsigned int end) nogil:
-    cdef vector[_ExPolygon].iterator it = self.thisptr[0][nlayer].begin()
-    self.thisptr[0][nlayer].erase(it+init, it+end)
-    
-  @cython.boundscheck(False)  
-  def removeExPolygons(self, unsigned int nlayer, unsigned int init, unsigned int end):
-    """in a layer, remove a range of ExPolygons"""
-    if nlayer>=self.thisptr[0].size():
-      raise IndexError('incorrect layer ID')
-    _rangecheck(init, end, self.thisptr[0][nlayer].size())
-    self._removeExPolygons(nlayer, init, end)
-    
-  @cython.boundscheck(False)  
-  cdef void _removeHoles(self, unsigned int nlayer, unsigned int nexp, unsigned int init, unsigned int end) nogil:
-    cdef vector[Polygon].iterator it = self.thisptr[0][nlayer][nexp].holes.begin()
-    self.thisptr[0][nlayer][nexp].holes.erase(it+init, it+end)
-    
-  @cython.boundscheck(False)  
-  def removeHoles(self, unsigned int nlayer, unsigned int nexp, unsigned int init, unsigned int end):
-    """in an expolygon within a layer, remove a range of holes"""
-    if nlayer>=self.thisptr[0].size():
-      raise IndexError('incorrect layer ID')
-    if nexp>=self.thisptr[0][nlayer].size():
-      raise IndexError('incorrect ExPolygon ID')
-    _rangecheck(init, end, self.thisptr[0][nlayer][nexp].holes.size())
-    self._removeExPolygons(nlayer, init, end)
-  
-  @cython.boundscheck(False)  
-  def select(self, cnp.ndarray[cnp.int64_t, ndim=1] selectedzs):
-    """given an array of layer indexes, returns a new SlicedModel with a copy of
-    those layers"""
-    cdef SlicedModel selected = SlicedModel(self.zvalues[selectedzs])
-    cdef bool ok = True
-    cdef unsigned int k, siz
-    siz = selectedzs.size
-    with nogil:
-      selected.thisptr[0].reserve(siz)
-      for k in range(siz):
-        if (selectedzs[k]>=0) and ((<unsigned int>selectedzs[k])<self.thisptr[0].size()):
-          selected.thisptr[0].push_back(self.thisptr[0][selectedzs[k]])
-        else:
-          ok = False
-          break
-    if not ok:
-      raise Exception('Invalid layer index')
-    return selected
-
-  def merge(self, SlicedModel other, double mergeTolerance = 0.0):
-    """merge data from this SlicedModel and another one into a new one.
-    Slices from each model are merged if their z values are within mergeTolerance.
-    WARNING: no sanity checks are done. If the ExPolygons within mergeTolerance
-    interesect, the behaviour is undefined for further calls to the Slic3r C++ library."""
-    return mergeSlicedModels([self, other], mergeTolerance)
-
-  def save(self, basestring filename, basestring mode='ply'):
-    model = mode.lower()
-    if mode=='ply':
-      writeAsPLY(self, filename)
-    elif mode=='svg':
-      writeAsSVG(self, filename)
-    else:
-      raise Exception('mode not understood: '+mode)
+    Currently the following slicings are supported:
+        * self[int]:             return Layer
+        * self[slice]:           return [Layer]
+        * self[int, 'z']:        return z value of the layer
+        * self[int, int]:        return ExPolygon
+        * self[int, slice]:      return [ExPolygon]
+        * self[int, int, 'c']:   return array of coordinates of Contour
+        * self[int, int, int]:   return array of coordinates of Hole
+        * self[int, int, slice]: return list of Holes
       
+      Slice limits are automatically clipped to be coherent with the object dimensions
+      
+      Note that it is not practical to slice the list/arrays here becuase of ambiguities
+      (for example, self[int, int, int] may be either a Hole or a point in a Contour)
+        """
+    cdef unsigned int ndims, nlayer, nexp
+    cdef bool asi = True
+    cdef bool asv = True
+    if isinstance(val, int) or isinstance(val, slice):
+      #we use toLayerList instead of toSliceCollection to avoid an useless indirection layer
+      return self.toLayerList(asi, asv, val)
+    elif isinstance(val, tuple):
+      ndims = len(val)
+      if ndims==1:
+        return self.toLayerList(asi, asv, val[0])
+      else:
+        if not isinstance(val[0], int):
+          raise IndexError('multidimensional slicing across layers is not supported')
+        else:
+          nlayer = val[0]
+          if ndims==2:
+            if isinstance(val[1], basestring):
+              return self.zvalues[nlayer]
+            else:
+              return self.toExPolygonList(nlayer, asi, asv, val[1])
+          else:
+            
+            if not isinstance(val[1], int):
+              raise IndexError('multidimensional slicing across ExPolygons is not supported')
+            else:
+              if ndims>3:
+                raise IndexError('ExPolygon components are arrays. If you want to slice them, do it separately')
+              nexp = val[1]
+              if isinstance(val[2], basestring): #get the contour
+                return self.Polygon2array(&self.thisptr[0][nlayer][nexp].contour, asi, asv)
+              else:
+                return self.toHoleList(nlayer, nexp, asi, asv, val[2])
+    else:
+      raise IndexError('Invalid slice object')
+
+  ########################################################################
+  #METHODS TO CONVERT TO/FROM Clipper datatypes
+  ########################################################################
+
+  @cython.boundscheck(False)
+  cdef c.Paths* _layerToClipperPaths(self, unsigned int nlayer, c.Paths *output) nogil:
+    if output==NULL:
+      output = new c.Paths()
+    Slic3rExPolygons_to_ClipperPaths(self.thisptr[0][nlayer], output)
+    return output
+  
+  def layerToClipperPaths(self, unsigned int nlayer):
+    """Transform a layer into a ClipperPaths structure, wich can be processed by Clipper"""
+    if nlayer>=self.thisptr[0].size():
+      raise IndexError('incorrect layer ID')
+    cdef _c.ClipperPaths paths = _c.ClipperPaths()
+    paths.thisptr = self._layerToClipperPaths(nlayer, paths.thisptr)
+    return paths
+
+  def layersToClipperPaths(self):
+    """Returns an iterator that transforms each layer into a ClipperPaths"""
+    cdef _c.ClipperPaths paths 
+    for k in xrange(self.thisptr[0].size()):
+      paths         = _c.ClipperPaths()
+      paths.thisptr = self._layerToClipperPaths(k, paths.thisptr)
+      yield paths
+  
+  @cython.boundscheck(False)
+  cdef void _setLayerFromClipperPaths(self, unsigned int nlayer, c.Paths *inputs) nogil:
+    """This operation is relatively expensive"""
+    ClipperPaths_to_Slic3rExPolygons(inputs[0], &self.thisptr[0][nlayer], True)
+  
+  def setLayerFromClipperPaths(self, unsigned int nlayer, _c.ClipperPaths paths):
+    """Transform a ClipperPaths structure back to a layer"""
+    if nlayer>=self.thisptr[0].size():
+      raise IndexError('incorrect layer ID')
+    self._setLayerFromClipperPaths(nlayer, paths.thisptr)
+    
+  @cython.boundscheck(False)
+  cdef void _setLayerFromClipperPolyTree(self, unsigned int nlayer, c.PolyTree *inputs) nogil:
+    """This operation is relatively cheap, compared to _setLayerFromClipperPaths()"""
+    PolyTreeToExPolygons(inputs[0], self.thisptr[0][nlayer], True)
+  
+  def setLayerFromClipperPolyTree(self, unsigned int nlayer, _c.ClipperPolyTree trees):
+    """Transform a ClipperPolyTree structure back to a layer. Note that the method
+    layerToClipperPolyTree does not exist, because Clipper provides no support for
+    that conversion"""
+    if nlayer>=self.thisptr[0].size():
+      raise IndexError('incorrect layer ID')
+    self._setLayerFromClipperPolyTree(nlayer, trees.thisptr)
+
+  ########################################################################
+  #METHODS TO CONVERT TO PYTHONIC STRUCTURES
+  ########################################################################
+
   @cython.boundscheck(False)
   def toSliceCollection(self, bool asInteger=False, bool asView=False, rang=None):
     """Same as toLayerList, but returns the list of layers wrapped in a SliceCollection
@@ -298,107 +340,10 @@ cdef class SlicedModel:
     if justInteger:
       return ret[0]
     return ret
-    
-  def __len__(self):
-    return self.thisptr[0].size()
-  def __iter__(self):
-    return SlicedModelIterator(self)
-  
-  def __getitem__(self, val):
-    """rich but incomplete multidimension slicing support.
-    
-    This object represents a list of layers. Each layer has a z value and a
-    list of expolygons. Each expolygon has a contour and a list of holes.
-    Both contours and holes are lists of int64 points.
-    
-    Currently the following slicings are supported:
-        * self[int]:             return Layer
-        * self[slice]:           return [Layer]
-        * self[int, 'z']:        return z value of the layer
-        * self[int, int]:        return ExPolygon
-        * self[int, slice]:      return [ExPolygon]
-        * self[int, int, 'c']:   return array of coordinates of Contour
-        * self[int, int, int]:   return array of coordinates of Hole
-        * self[int, int, slice]: return list of Holes
-      
-      Slice limits are automatically clipped to be coherent with the object dimensions
-      
-      Note that it is not practical to slice the list/arrays here becuase of ambiguities
-      (for example, self[int, int, int] may be either a Hole or a point in a Contour)
-        """
-    cdef unsigned int ndims, nlayer, nexp
-    cdef bool asi = True
-    cdef bool asv = True
-    if isinstance(val, int) or isinstance(val, slice):
-      #we use toLayerList instead of toSliceCollection to avoid an useless indirection layer
-      return self.toLayerList(asi, asv, val)
-    elif isinstance(val, tuple):
-      ndims = len(val)
-      if ndims==1:
-        return self.toLayerList(asi, asv, val[0])
-      else:
-        if not isinstance(val[0], int):
-          raise IndexError('multidimensional slicing across layers is not supported')
-        else:
-          nlayer = val[0]
-          if ndims==2:
-            if isinstance(val[1], basestring):
-              return self.zvalues[nlayer]
-            else:
-              return self.toExPolygonList(nlayer, asi, asv, val[1])
-          else:
-            
-            if not isinstance(val[1], int):
-              raise IndexError('multidimensional slicing across ExPolygons is not supported')
-            else:
-              if ndims>3:
-                raise IndexError('ExPolygon components are arrays. If you want to slice them, do it separately')
-              nexp = val[1]
-              if isinstance(val[2], basestring): #get the contour
-                return self.Polygon2array(&self.thisptr[0][nlayer][nexp].contour, asi, asv)
-              else:
-                return self.toHoleList(nlayer, nexp, asi, asv, val[2])
-    else:
-      raise IndexError('Invalid slice object')
-  
-  @cython.boundscheck(False)  
-  cpdef unsigned int numLayers(self):
-    """number of layers of the sliced model"""
-    return self.thisptr[0].size()
-  
-  @cython.boundscheck(False)  
-  cpdef unsigned int numExPolygons(self, unsigned int nlayer):
-    """number of ExPolygons in a layer of the sliced model"""
-    if nlayer>=self.thisptr.size():
-      raise IndexError('incorrect layer ID')
-    return self.thisptr[0][nlayer].size()
-    
-  @cython.boundscheck(False)  
-  cpdef unsigned int numHoles(self, unsigned int nlayer, unsigned int nExpolygon):
-    """number of holes in an ExPolygon of a layer of the sliced model"""
-    if nlayer>=self.thisptr[0].size():
-      raise IndexError('incorrect layer ID')
-    if nExpolygon>=self.thisptr[0][nlayer].size():
-      raise IndexError('incorrect Expolygon ID')
-    return self.thisptr[0][nlayer][nExpolygon].holes.size()
 
-  @cython.boundscheck(False)
-  def allExPolygons(self, bool asInteger=False, asView=False):
-    """return a generator for all expolygons in all layers. Each ExPolygon is
-    returned as a tuple with a layer index, an expolygon index (within the layer),
-    a layer depth (z value), a contour and a list of holes. The contour and the
-    holes are returned as numpy arrays, whose type is either numpy.int64 (native
-    type of ExPolygon coordinates) or scaled numpy.float64 values"""
-    cdef unsigned int k1, k2
-    cdef double z
-    cdef cnp.ndarray contour
-    for k1 in xrange(self.thisptr[0].size()):
-      z = self.zvalues[k1] #using yield, we cannot use a numpy array buffer declaration
-      for k2 in xrange(self.thisptr[0][k1].size()):
-        contour =  self.Polygon2array(&self.thisptr[0][k1][k2].contour,  asInteger, asView)
-        holes   = [self.Polygon2array(&self.thisptr[0][k1][k2].holes[h], asInteger, asView)
-                       for h in xrange(self.thisptr[0][k1][k2].holes.size())]
-        yield (k1, k2, z, contour, holes)
+  ########################################################################
+  #METHODS TO ACCESS DATA
+  ########################################################################
 
   @cython.boundscheck(False)
   cdef cnp.ndarray Polygon2array(self, Polygon *pol, bool asInteger=True, bool asView=True):
@@ -431,6 +376,134 @@ cdef class SlicedModel:
       raise IndexError('incorrect hole ID')
     return self.Polygon2array(&self.thisptr[0][nlayer][nExpolygon].holes[nhole], asInteger, asView)
 
+  @cython.boundscheck(False)
+  def allExPolygons(self, bool asInteger=False, asView=False):
+    """return a generator for all expolygons in all layers. Each ExPolygon is
+    returned as a tuple with a layer index, an expolygon index (within the layer),
+    a layer depth (z value), a contour and a list of holes. The contour and the
+    holes are returned as numpy arrays, whose type is either numpy.int64 (native
+    type of ExPolygon coordinates) or scaled numpy.float64 values"""
+    cdef unsigned int k1, k2
+    cdef double z
+    cdef cnp.ndarray contour
+    for k1 in xrange(self.thisptr[0].size()):
+      z = self.zvalues[k1] #using yield, we cannot use a numpy array buffer declaration
+      for k2 in xrange(self.thisptr[0][k1].size()):
+        contour =  self.Polygon2array(&self.thisptr[0][k1][k2].contour,  asInteger, asView)
+        holes   = [self.Polygon2array(&self.thisptr[0][k1][k2].holes[h], asInteger, asView)
+                       for h in xrange(self.thisptr[0][k1][k2].holes.size())]
+        yield (k1, k2, z, contour, holes)
+
+  ########################################################################
+  #METHODS TO REMOVE DATA
+  ########################################################################
+
+  #nogil SHOULD BE ALLOWED IN THE DEFINITIONS OF THE _removeXXX methods, BUT
+  #WE CANNOT PUT IT BECAUSE OF A WEIRD CYTHON BUG (COMPILATION FAILS, COMPLAINING  
+  #IN THE ARGUMENT LIST OF .remove(): "Converting to Python object not allowed without gil"
+  
+  @cython.boundscheck(False)  
+  cdef void _removeLayers(self, unsigned int init, unsigned int end) nogil:
+    cdef vector[ExPolygons].iterator it = self.thisptr[0].begin()
+    self.thisptr[0].erase(it+init, it+end)
+    
+  @cython.boundscheck(False)  
+  def removeLayers(self, unsigned int init, unsigned int end):
+    """remove a range of layers"""
+    _rangecheck(init, end, self.thisptr[0].size())
+    self._remove(init, end)
+    
+  @cython.boundscheck(False)  
+  cdef void _removeExPolygons(self, unsigned int nlayer, unsigned int init, unsigned int end) nogil:
+    cdef vector[_ExPolygon].iterator it = self.thisptr[0][nlayer].begin()
+    self.thisptr[0][nlayer].erase(it+init, it+end)
+    
+  @cython.boundscheck(False)  
+  def removeExPolygons(self, unsigned int nlayer, unsigned int init, unsigned int end):
+    """in a layer, remove a range of ExPolygons"""
+    if nlayer>=self.thisptr[0].size():
+      raise IndexError('incorrect layer ID')
+    _rangecheck(init, end, self.thisptr[0][nlayer].size())
+    self._removeExPolygons(nlayer, init, end)
+    
+  @cython.boundscheck(False)  
+  cdef void _removeHoles(self, unsigned int nlayer, unsigned int nexp, unsigned int init, unsigned int end) nogil:
+    cdef vector[Polygon].iterator it = self.thisptr[0][nlayer][nexp].holes.begin()
+    self.thisptr[0][nlayer][nexp].holes.erase(it+init, it+end)
+    
+  @cython.boundscheck(False)  
+  def removeHoles(self, unsigned int nlayer, unsigned int nexp, unsigned int init, unsigned int end):
+    """in an expolygon within a layer, remove a range of holes"""
+    if nlayer>=self.thisptr[0].size():
+      raise IndexError('incorrect layer ID')
+    if nexp>=self.thisptr[0][nlayer].size():
+      raise IndexError('incorrect ExPolygon ID')
+    _rangecheck(init, end, self.thisptr[0][nlayer][nexp].holes.size())
+    self._removeExPolygons(nlayer, init, end)
+
+  ########################################################################
+  #MISCELLANEA OF METHODS
+  ########################################################################
+
+  @cython.boundscheck(False)  
+  def select(self, cnp.ndarray[cnp.int64_t, ndim=1] selectedzs):
+    """given an array of layer indexes, returns a new SlicedModel with a copy of
+    those layers"""
+    cdef SlicedModel selected = SlicedModel(self.zvalues[selectedzs])
+    cdef bool ok = True
+    cdef unsigned int k, siz
+    siz = selectedzs.size
+    with nogil:
+      selected.thisptr[0].reserve(siz)
+      for k in range(siz):
+        if (selectedzs[k]>=0) and ((<unsigned int>selectedzs[k])<self.thisptr[0].size()):
+          selected.thisptr[0].push_back(self.thisptr[0][selectedzs[k]])
+        else:
+          ok = False
+          break
+    if not ok:
+      raise Exception('Invalid layer index')
+    return selected
+
+  def merge(self, SlicedModel other, double mergeTolerance = 0.0):
+    """merge data from this SlicedModel and another one into a new one.
+    Slices from each model are merged if their z values are within mergeTolerance.
+    WARNING: no sanity checks are done. If the ExPolygons within mergeTolerance
+    interesect, the behaviour is undefined for further calls to the Slic3r C++ library."""
+    return mergeSlicedModels([self, other], mergeTolerance)
+
+  def save(self, basestring filename, basestring mode='ply'):
+    model = mode.lower()
+    if mode=='ply':
+      writeAsPLY(self, filename)
+    elif mode=='svg':
+      writeAsSVG(self, filename)
+    else:
+      raise Exception('mode not understood: '+mode)
+      
+  cdef bool slicesAreOrdered(self):
+    return (np.diff(self.zvalues)>=0).all()
+    
+  @cython.boundscheck(False)  
+  cpdef unsigned int numLayers(self):
+    """number of layers of the sliced model"""
+    return self.thisptr[0].size()
+  
+  @cython.boundscheck(False)  
+  cpdef unsigned int numExPolygons(self, unsigned int nlayer):
+    """number of ExPolygons in a layer of the sliced model"""
+    if nlayer>=self.thisptr.size():
+      raise IndexError('incorrect layer ID')
+    return self.thisptr[0][nlayer].size()
+    
+  @cython.boundscheck(False)  
+  cpdef unsigned int numHoles(self, unsigned int nlayer, unsigned int nExpolygon):
+    """number of holes in an ExPolygon of a layer of the sliced model"""
+    if nlayer>=self.thisptr[0].size():
+      raise IndexError('incorrect layer ID')
+    if nExpolygon>=self.thisptr[0][nlayer].size():
+      raise IndexError('incorrect Expolygon ID')
+    return self.thisptr[0][nlayer][nExpolygon].holes.size()
 
 #######################################################################
 ########## MERGING SEVERAL SlicedModels TOGETHER ##########
@@ -769,6 +842,37 @@ cdef void writePolygonSVG(Polygon * pol, FILE * f, bool contour, double cx, doub
     fputs('black', f)
   fputs('" />\n', f)
 
+
+#######################################################################
+########## TRANSLATING from Clipper STRUCTURES TO SlicedModel##########
+#######################################################################
+
+@cython.boundscheck(False)
+def ClipperPolyTrees2SlicedModel(list trees, cnp.ndarray[cnp.float64_t, ndim=1] zvalues):
+  """Given a list of ClipperPolyTrees and a concordant array of z values, 
+  create a SlicedModel. This operation is cheaper than ClipperPaths2SlicedModel()"""
+  if len(trees)!=zvalues.size:
+    raise ValueError('The list of ClipperPolyTrees and z values must have the same length!')
+  cdef SlicedModel model = SlicedModel(zvalues)
+  cdef _c.ClipperPolyTree tree
+  model.thisptr[0].resize(zvalues.size)
+  for k in range(zvalues.size):
+    tree = trees[k]
+    PolyTreeToExPolygons(tree.thisptr[0], model.thisptr[0][k], False)
+    
+@cython.boundscheck(False)
+def ClipperPaths2SlicedModel(list paths, cnp.ndarray[cnp.float64_t, ndim=1] zvalues):
+  """Given a list of ClipperPaths and a concordant array of z values, 
+  create a SlicedModel. """
+  if len(paths)!=zvalues.size:
+    raise ValueError('The list of ClipperPaths and z values must have the same length!')
+  cdef SlicedModel model = SlicedModel(zvalues)
+  cdef _c.ClipperPaths ps
+  model.thisptr[0].resize(zvalues.size)
+  for k in range(zvalues.size):
+    ps = paths[k]
+    ClipperPaths_to_Slic3rExPolygons(ps.thisptr[0], &model.thisptr[0][k], False)
+    
 
 #######################################################################
 ########## TRANSLATING SlicedModel TO PYTHONIC STRUCTURE ##########

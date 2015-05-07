@@ -4,6 +4,9 @@ cimport numpy as cnp
 
 cimport slic3r_defs as s3
 
+cimport  Clipper as  c
+#cimport _Clipper as _c
+
 cdef class SlicedModel:
   """wrapper for the Slic3r data structure for a list of sliced layers"""
   cdef  s3.SLICEDMODEL *thisptr
@@ -21,6 +24,6 @@ cdef class SlicedModel:
   cpdef object  toHoleList        (self, unsigned int nlayer, unsigned int nexp, bool asInteger=?, bool asView=?, rang=?)
   cdef  object _toHoleList        (self, unsigned int nlayer, unsigned int nexp, bool asInteger=?, bool asView=?, rang=?)
   cdef  cnp.ndarray Polygon2array (self, s3.Polygon *pol,                        bool asInteger=?, bool asView=?)
-
-
-
+  cdef  c.Paths* _layerToClipperPaths        (self, unsigned int nlayer, c.Paths    *output) nogil
+  cdef  void     _setLayerFromClipperPaths   (self, unsigned int nlayer, c.Paths    *inputs) nogil
+  cdef  void     _setLayerFromClipperPolyTree(self, unsigned int nlayer, c.PolyTree *inputs) nogil
