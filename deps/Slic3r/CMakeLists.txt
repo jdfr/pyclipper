@@ -28,7 +28,11 @@ if (NOT EXISTS ${SRC})
   #we now execute a git command. cmake has a directive to build external projects (ExternalProject_Add)
   #that can do this, but it does so at building time, while we need to download the source at cmake time
   execute_process(COMMAND git clone https://github.com/jdfr/Slic3r.git
-                  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+                  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                  RESULT_VARIABLE gitresult)
+  if (NOT (gitresult EQUAL 0))
+    message(FATAL_ERROR "No source directory for Slic3r was detected (deps/Slic3r/Slic3r/xs/src/), but git was not able to clone Slic3r into deps/Slic3r/Slic3r")
+  endif()
 endif()
 
 
