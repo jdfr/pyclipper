@@ -230,6 +230,7 @@ cdef class SlicedModel:
   def layersToClipperPaths(self):
     """Returns an iterator that transforms each layer into a ClipperPaths"""
     cdef _c.ClipperPaths paths 
+    cdef unsigned int k
     for k in xrange(self.thisptr[0].size()):
       paths         = _c.ClipperPaths()
       paths.thisptr = self._layerToClipperPaths(k, paths.thisptr)
@@ -855,6 +856,7 @@ def ClipperPolyTrees2SlicedModel(list trees, cnp.ndarray[cnp.float64_t, ndim=1] 
     raise ValueError('The list of ClipperPolyTrees and z values must have the same length!')
   cdef SlicedModel model = SlicedModel(zvalues)
   cdef _c.ClipperPolyTree tree
+  cdef unsigned int k
   model.thisptr[0].resize(zvalues.size)
   for k in range(zvalues.size):
     tree = trees[k]
@@ -868,6 +870,7 @@ def ClipperPaths2SlicedModel(list paths, cnp.ndarray[cnp.float64_t, ndim=1] zval
     raise ValueError('The list of ClipperPaths and z values must have the same length!')
   cdef SlicedModel model = SlicedModel(zvalues)
   cdef _c.ClipperPaths ps
+  cdef unsigned int k
   model.thisptr[0].resize(zvalues.size)
   for k in range(zvalues.size):
     ps = paths[k]
