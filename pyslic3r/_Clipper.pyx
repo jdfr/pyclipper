@@ -20,23 +20,28 @@ cdef extern from "numpy/ndarraytypes.h" nogil:
 cdef extern from "math.h" nogil:
   double fabs(double)
 
-
+#enum ClipType
 ctIntersection      = c.ctIntersection
 ctUnion             = c.ctUnion
 ctDifference        = c.ctDifference
 ctXor               = c.ctXor
+#enum PolyType
 ptSubject           = c.ptSubject
 ptClip              = c.ptClip
+#enum PolyFillType
 pftEvenOdd          = c.pftEvenOdd
 pftNonZero          = c.pftNonZero
 pftPositive         = c.pftPositive
 pftNegative         = c.pftNegative
-ioReverseSolution   = 1
-ioStrictlySimple    = 2
-ioPreserveCollinear = 4
+#enum InitOptions
+ioReverseSolution   = c.ioReverseSolution
+ioStrictlySimple    = c.ioStrictlySimple
+ioPreserveCollinear = c.ioPreserveCollinear
+#enum JoinType
 jtSquare            = c.jtSquare
 jtRound             = c.jtRound
 jtMiter             = c.jtMiter
+#enum EndType
 etClosedPolygon     = c.etClosedPolygon
 etClosedLine        = c.etClosedLine
 etOpenButt          = c.etOpenButt
@@ -52,8 +57,72 @@ cdef class ClipperPaths:
 
   def __cinit__(self):       self.thisptr = new c.Paths()
   def __dealloc__(self): del self.thisptr
+  
+  cpdef reverse(self):
+    c.ReversePaths(self.thisptr[0])
+  
+  cdef c.Paths * _simplify(self, c.Paths *out, c.PolyFillType fillType=c.pftEvenOdd) nogil:
+    if out==NULL:
+      out = new c.Paths()
+    c.SimplifyPolygons(self.thisptr[0], out[0], fillType)
+    return out
+  
+  cpdef ClipperPaths simplify(self, int fillType=c.pftEvenOdd):
+    cdef ClipperPaths out = ClipperPaths()
+    out.thisptr = self._simplify(out.thisptr, <c.PolyFillType>fillType)
+    return out
 
+  cpdef simplifyInPlace(self, int fillType=c.pftEvenOdd):
+    c.SimplifyPolygons(self.thisptr[0], <c.PolyFillType>fillType)
+  
+  cdef c.Paths * _clean(self, c.Paths *out, double distance=1.415) nogil:
+    if out==NULL:
+      out = new c.Paths()
+    c.CleanPolygons(self.thisptr[0], out[0], distance)
+    return out
+  
+  cpdef ClipperPaths clean(self, double distance=1.415):
+    cdef ClipperPaths out = ClipperPaths()
+    out.thisptr = self._clean(out.thisptr, distance)
+    return out
 
+  cpdef cleanInPlace(self, double distance=1.415):
+    c.CleanPolygons(self.thisptr[0], distance)
+  
+  cpdef unsigned int numPaths(self):
+    return self.thisptr[0].size()
+  
+  cpdef bool orientation(self, unsigned int npath):
+    return c.Orientation(self.thisptr[0][npath])
+    
+  @cython.boundscheck(False)
+  cpdef cnp.ndarray orientations(self):
+    cdef cnp.npy_intp length = self.thisptr[0].size()
+    #using cnp.uint8_t is an ugly hack, but there is no cnp.bool_t
+    cdef cnp.ndarray out = cnp.PyArray_EMPTY(1, &length, cnp.NPY_BOOL, 0)
+    cdef unsigned int k
+    for k in range(length):
+      out[k] = c.Orientation(self.thisptr[0][k])
+    return out
+  
+  cpdef double area(self, unsigned int npath):
+    return c.Area(self.thisptr[0][npath])
+    
+  @cython.boundscheck(False)
+  cpdef cnp.ndarray[cnp.float64_t, ndim=1] areas(self):
+    cdef cnp.npy_intp length = self.thisptr[0].size()
+    cdef cnp.ndarray[cnp.float64_t, ndim=1] out = cnp.PyArray_EMPTY(1, &length, cnp.NPY_FLOAT64, 0)
+    cdef unsigned int k
+    for k in range(length):
+      out[k] = c.Area(self.thisptr[0][k])
+    return out
+
+  cpdef int pointInPolygon(self, unsigned int npath, int x, int y):
+    cdef c.IntPoint p
+    p.X = x
+    p.Y = y
+    return c.PointInPolygon(p, self.thisptr[0][npath])
+  
 cdef class ClipperPolyTree:
   """Thin wrapper around Clipper::PolyTree. It is intended just as a temporary object
   to do Clipper operations on the data, the end results to be incorporated back
@@ -74,6 +143,15 @@ cdef class ClipperPolyTree:
     cdef ClipperPaths paths = ClipperPaths()
     paths.thisptr           = self.toPaths(paths.thisptr)
     return paths
+  
+  cpdef ClipperPaths toClipperPathsByType(self, bool closed):
+    cdef ClipperPaths paths = ClipperPaths()
+    if closed:
+      c.ClosedPathsFromPolyTree(self.thisptr[0], paths.thisptr[0])
+    else:
+      c.OpenPathsFromPolyTree(self.thisptr[0], paths.thisptr[0])
+    return paths
+    
 
 
 cdef class ClipperClip:
