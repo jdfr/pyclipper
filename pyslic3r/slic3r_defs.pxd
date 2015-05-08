@@ -125,7 +125,7 @@ cdef extern from "libslic3r/TriangleMesh.hpp" namespace "Slic3r" nogil:
     
 cdef extern from "libslic3r/ClipperUtils.hpp" namespace "Slic3r" nogil:
   void AddOuterPolyNodeToExPolygons(c.PolyNode& polynode, ExPolygons& expolygons)
-  void PolyTreeToExPolygons(c.PolyTree& polytree, ExPolygons& expolygons, bool eraseOutput)
+  void PolyTreeToExPolygons(c.PolyTree& polytree, ExPolygons * expolygons, bool eraseOutput)
   void Slic3rMultiPoint_to_ClipperPath(const MultiPoint &inputt, c.Path* output)
   void Slic3rMultiPoints_to_ClipperPaths[T](const T &inputt, c.Paths* output)
   void ClipperPath_to_Slic3rMultiPoint[T](const c.Path &inputt, T* output, bool eraseOutput)
