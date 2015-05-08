@@ -24,6 +24,8 @@ cimport _Clipper as _c
 
 from numpy.math cimport INFINITY#, NAN, isnan
 
+import itertools as it
+
 #np.import_array()
 cnp.import_array()
 
@@ -123,16 +125,18 @@ cdef class SlicedModel:
   #SPECIAL METHODS
   ########################################################################
   
-  property zvals:
+  property zs:
     """expose the z values to python"""
     def __get__(self):
       return self.zvalues
     def __set__(self, cnp.ndarray[cnp.float64_t, ndim=1] val):
       self.zvalues = val
 
-  def __cinit__(self, cnp.ndarray[cnp.float64_t, ndim=1] zvalues=None, bool doinit = True):
+  def __cinit__(self, cnp.ndarray[cnp.float64_t, ndim=1] zvalues=None, bool doinit = True, bool doresize = False):
     if doinit:
       self.thisptr = new SLICEDMODEL()
+    if doresize:
+      self.thisptr[0].resize(zvalues.size)
     self.zvalues = zvalues
 
   def __dealloc__(self):
@@ -250,16 +254,26 @@ cdef class SlicedModel:
   @cython.boundscheck(False)
   cdef void _setLayerFromClipperPolyTree(self, unsigned int nlayer, c.PolyTree *inputs) nogil:
     """This operation is relatively cheap, compared to _setLayerFromClipperPaths()"""
-    PolyTreeToExPolygons(inputs[0], self.thisptr[0][nlayer], True)
+    PolyTreeToExPolygons(inputs[0], &self.thisptr[0][nlayer], True)
   
-  def setLayerFromClipperPolyTree(self, unsigned int nlayer, _c.ClipperPolyTree trees):
+  def setLayerFromClipperPolyTree(self, unsigned int nlayer, _c.ClipperPolyTree tree):
     """Transform a ClipperPolyTree structure back to a layer. Note that the method
     layerToClipperPolyTree does not exist, because Clipper provides no support for
     that conversion"""
     if nlayer>=self.thisptr[0].size():
       raise IndexError('incorrect layer ID')
-    self._setLayerFromClipperPolyTree(nlayer, trees.thisptr)
+    self._setLayerFromClipperPolyTree(nlayer, tree.thisptr)
 
+  def setLayerFromClipperObject(self, unsigned int nlayer, object obj):
+    """Transform either a ClipperPaths or a ClipperPolyTree back to a layer.
+    The former is more expensive than the latter"""
+    if nlayer>=self.thisptr[0].size():
+      raise IndexError('incorrect layer ID')
+    if   isinstance(obj, _c.ClipperPaths   ): self._setLayerFromClipperPaths   (nlayer, (<_c.ClipperPaths>   obj).thisptr)
+    elif isinstance(obj, _c.ClipperPolyTree): self._setLayerFromClipperPolyTree(nlayer, (<_c.ClipperPolyTree>obj).thisptr)
+    else                                    : raise Exception('Cannot set layer from object of this type: '+str(type(obj)))
+    
+    
   ########################################################################
   #METHODS TO CONVERT TO PYTHONIC STRUCTURES
   ########################################################################
@@ -673,6 +687,7 @@ def layersAsTriangleMesh(SlicedModel model):
   cdef bool ok = True
   kp = 0
   #kt = 0
+
   polss = triangulateAllLayers(model)
   try:
     countPolygons(polss, &numP, &numV)
@@ -849,33 +864,22 @@ cdef void writePolygonSVG(Polygon * pol, FILE * f, bool contour, double cx, doub
 #######################################################################
 
 @cython.boundscheck(False)
-def ClipperPolyTrees2SlicedModel(list trees, cnp.ndarray[cnp.float64_t, ndim=1] zvalues):
-  """Given a list of ClipperPolyTrees and a concordant array of z values, 
-  create a SlicedModel. This operation is cheaper than ClipperPaths2SlicedModel()"""
-  if len(trees)!=zvalues.size:
-    raise ValueError('The list of ClipperPolyTrees and z values must have the same length!')
+def ClipperObjects2SlicedModel(object clippers, cnp.ndarray[cnp.float64_t, ndim=1] zvalues):
+  """Given a list or iterator of ClipperPolyTrees/ClipperPaths, and a
+  concordant array of z values, create a SlicedModel. It is cheaper to
+  convert ClipperPolyTrees than ClipperPaths"""
   cdef SlicedModel model = SlicedModel(zvalues)
-  cdef _c.ClipperPolyTree tree
   cdef unsigned int k
   model.thisptr[0].resize(zvalues.size)
-  for k in range(zvalues.size):
-    tree = trees[k]
-    PolyTreeToExPolygons(tree.thisptr[0], model.thisptr[0][k], False)
-    
-@cython.boundscheck(False)
-def ClipperPaths2SlicedModel(list paths, cnp.ndarray[cnp.float64_t, ndim=1] zvalues):
-  """Given a list of ClipperPaths and a concordant array of z values, 
-  create a SlicedModel. """
-  if len(paths)!=zvalues.size:
-    raise ValueError('The list of ClipperPaths and z values must have the same length!')
-  cdef SlicedModel model = SlicedModel(zvalues)
-  cdef _c.ClipperPaths ps
-  cdef unsigned int k
-  model.thisptr[0].resize(zvalues.size)
-  for k in range(zvalues.size):
-    ps = paths[k]
-    ClipperPaths_to_Slic3rExPolygons(ps.thisptr[0], &model.thisptr[0][k], False)
-    
+  for k, obj in it.izip(xrange(zvalues.size), clippers):
+    if   isinstance(obj, _c.ClipperPolyTree):
+      tree = obj
+      PolyTreeToExPolygons            ((<_c.ClipperPolyTree>obj).thisptr[0], &model.thisptr[0][k], False)
+    elif isinstance(obj, _c.ClipperPaths):
+      ClipperPaths_to_Slic3rExPolygons((<_c.ClipperPaths>   obj).thisptr[0], &model.thisptr[0][k], False)
+    else:
+      raise Exception('Invalid object type (neither ClipperPaths nor ClipperPolyTree)')
+  return model
 
 #######################################################################
 ########## TRANSLATING SlicedModel TO PYTHONIC STRUCTURE ##########
