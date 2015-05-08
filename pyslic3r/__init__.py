@@ -15,3 +15,4 @@
 
 from ._SlicedModel  import *
 from ._TriangleMesh import *
+from ._Clipper      import *
