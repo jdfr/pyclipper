@@ -51,7 +51,7 @@ etOpenRound         = c.etOpenRound
 
 cdef class ClipperPathsIterator:
   cdef ClipperPaths paths
-  cdef unsigned int current
+  cdef size_t current
   
   def __cinit__(self, ClipperPaths p):
     self.paths   = p
@@ -72,7 +72,7 @@ def arrayListToClipperPaths(list paths, ClipperPaths output=None):
   """Convert a list of two-dimensional arrays of type int64 to a ClipperPaths 
   object (this list can be got with list(x for x in paths)"""
   cdef c.Path *path
-  cdef unsigned int k, p, npaths, npoints
+  cdef size_t k, p, npaths, npoints
   cdef cnp.ndarray[cnp.int64_t, ndim=1] array
   if output is None:
     output = ClipperPaths()
@@ -112,7 +112,7 @@ cdef class ClipperPaths:
     cdef int npath
     if   isinstance(val, int):
       npath = val
-      if (npath<0) or (<unsigned int>npath>=self.thisptr[0].size()):
+      if (npath<0) or (<size_t>npath>=self.thisptr[0].size()):
         raise Exception('Invalid index')
       return Path2arrayView(self.paths, &self.thisptr[0][npath])
     elif isinstance(val, slice) or isinstance(val, tuple):
@@ -155,7 +155,7 @@ cdef class ClipperPaths:
     c.CleanPolygons(self.thisptr[0], distance)
   
   @cython.boundscheck(False)
-  def orientation(self, unsigned int npath):
+  def orientation(self, size_t npath):
     if npath>=self.thisptr[0].size():
       raise Exception('Invalid index')
     return c.Orientation(self.thisptr[0][npath])
@@ -165,13 +165,13 @@ cdef class ClipperPaths:
     cdef cnp.npy_intp length = self.thisptr[0].size()
     #using cnp.uint8_t is an ugly hack, but there is no cnp.bool_t
     cdef cnp.ndarray out = cnp.PyArray_EMPTY(1, &length, cnp.NPY_BOOL, 0)
-    cdef unsigned int k
-    for k in range(length):
+    cdef size_t k
+    for k in range(<size_t>length):
       out[k] = c.Orientation(self.thisptr[0][k])
     return out
   
   @cython.boundscheck(False)
-  def area(self, unsigned int npath):
+  def area(self, size_t npath):
     if npath>=self.thisptr[0].size():
       raise Exception('Invalid index')
     return c.Area(self.thisptr[0][npath])
@@ -180,13 +180,13 @@ cdef class ClipperPaths:
   def areas(self):
     cdef cnp.npy_intp length = self.thisptr[0].size()
     cdef cnp.ndarray[cnp.float64_t, ndim=1] out = cnp.PyArray_EMPTY(1, &length, cnp.NPY_FLOAT64, 0)
-    cdef unsigned int k
-    for k in range(length):
+    cdef size_t k
+    for k in range(<size_t>length):
       out[k] = c.Area(self.thisptr[0][k])
     return out
 
   @cython.boundscheck(False)
-  def pointInPolygon(self, unsigned int npath, int x, int y):
+  def pointInPolygon(self, size_t npath, c.cInt x, c.cInt y):
     if npath>=self.thisptr[0].size():
       raise Exception('Invalid index')
     cdef c.IntPoint p

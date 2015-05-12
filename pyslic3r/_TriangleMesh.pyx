@@ -131,7 +131,7 @@ cdef class TriangleMesh:
   @cython.boundscheck(False)
   def doslice(self, inputs, double safety_offset=DEFAULT_SLICING_SAFETY_OFFSET):
     """generate a sliced model of this mesh"""
-    cdef int k, k1, sz, sz1
+    cdef size_t k, sz
     cdef vector[cnp.float32_t] zsv
     cdef cnp.ndarray zs
     #we cannot allocate the object in the stack because cython requires it to have a contructor without args
