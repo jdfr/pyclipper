@@ -10,6 +10,7 @@ import numpy as np
 
 from libc.stdio cimport *
 
+from numpy.math cimport NAN, isnan
 
 #np.import_array()
 cnp.import_array()
@@ -256,7 +257,7 @@ cdef class ClipperClip:
     def __get__(self):   return self.cliptype
     def __set__(self, int val): self.cliptype    = <c.ClipType>val
 
-  def __cinit__  (self, int clipType=c.ctIntersection, int clipFillType=c.pftEvenOdd, int subjectFillType=c.pftEvenOdd, bool reverseSolution=False, bool strictlySimple=False, bool preserveCollinear=False):
+  def __cinit__  (self, int clipType=c.ctIntersection, int subjectFillType=c.pftEvenOdd, int clipFillType=c.pftEvenOdd, bool reverseSolution=False, bool strictlySimple=False, bool preserveCollinear=False):
     self.thisptr = new c.Clipper()
     self.subjectfill = <c.PolyFillType>subjectFillType
     self.clipfill    = <c.PolyFillType>clipFillType
@@ -276,18 +277,18 @@ cdef class ClipperClip:
   
   def clear(self):
     self.thisptr[0].Clear()
+  
+  #these two methods are defined just in case we want to profile
+  cdef bool ExecuteP (self, c.Paths    *solution, c.ClipType clipType, c.PolyFillType subjectFillType, c.PolyFillType clipFillType): return self.thisptr[0].Execute(clipType, solution[0], subjectFillType, clipFillType)
+  cdef bool ExecutePT(self, c.PolyTree *solution, c.ClipType clipType, c.PolyFillType subjectFillType, c.PolyFillType clipFillType): return self.thisptr[0].Execute(clipType, solution[0], subjectFillType, clipFillType)
 
-  cpdef bool ExecuteWithPaths   (self, ClipperPaths    solution):
-    return self.thisptr[0].Execute(self.cliptype, solution.thisptr[0], self.subjectfill, self.clipfill)
-
-  cpdef bool ExecuteWithPolyTree(self, ClipperPolyTree solution):
-    return self.thisptr[0].Execute(self.cliptype, solution.thisptr[0], self.subjectfill, self.clipfill)
-    
-  def        Execute            (self, object          solution):
-    if   isinstance(solution, ClipperPaths   ): return self.ExecuteWithPaths   (<ClipperPaths>   solution)
-    elif isinstance(solution, ClipperPolyTree): return self.ExecuteWithPolyTree(<ClipperPolyTree>solution)
+  def        Execute(self, object solution, int clipType=-1, int subjectFillType=-1, int clipFillType=-1):
+    if        clipType<0:        clipType = self.cliptype
+    if subjectFillType<0: subjectFillType = self.subjectfill
+    if    clipFillType<0:    clipFillType = self.clipfill
+    if   isinstance(solution, ClipperPaths   ): return self.ExecuteP ((<ClipperPaths>   solution).thisptr, <c.ClipType>clipType, <c.PolyFillType>subjectFillType, <c.PolyFillType>clipFillType)
+    elif isinstance(solution, ClipperPolyTree): return self.ExecutePT((<ClipperPolyTree>solution).thisptr, <c.ClipType>clipType, <c.PolyFillType>subjectFillType, <c.PolyFillType>clipFillType)
     else                                      : raise ValueError('Object of incorrect type: '+type(solution))
-
 
 
 cdef class ClipperOffset:
@@ -305,28 +306,39 @@ cdef class ClipperOffset:
     def __get__(self):      return self._delta
     def __set__(self, double val): self._delta = val
 
-  def __cinit__  (self, double miterLimit=3.0, double arcTolerance=3.0, double delta=1.0):
+  property joinType:
+    def __get__(self):      return self.jointype
+    def __set__(self, int    val): self.jointype = <c.JoinType>val
+
+  property endType:
+    def __get__(self):      return self.endtype
+    def __set__(self, int    val): self.endtype  = <c.EndType> val
+
+  def __cinit__  (self, double miterLimit=3.0, double arcTolerance=3.0, double delta=1.0, int joinType=c.jtRound, int endType=c.etClosedPolygon):
     self.thisptr                 = new c.ClipperOffset()
     self._delta                  = delta
+    self.jointype                = <c.JoinType>joinType
+    self.endtype                 = <c.EndType>endType
     self.thisptr[0].MiterLimit   = miterLimit
     self.thisptr[0].ArcTolerance = arcTolerance
   def __dealloc__(self): del self.thisptr
 
-  def AddPaths(self, ClipperPaths paths, int joinType=c.jtRound, int endType=c.etClosedPolygon):
+  def AddPaths(self, ClipperPaths paths, int joinType=-1, int endType=-1):
+    if joinType<0: joinType = self.jointype
+    if  endType<0:  endType = self. endtype
     self.thisptr[0].AddPaths(paths.thisptr[0], <c.JoinType>joinType, <c.EndType>endType)
 
   def clear(self):
     self.thisptr[0].Clear()
 
-  cpdef ExecuteWithPaths   (self, ClipperPaths    solution):
-    self.thisptr[0].Execute(solution.thisptr[0], self._delta)
-
-  cpdef ExecuteWithPolyTree(self, ClipperPolyTree solution):
-    self.thisptr[0].Execute(solution.thisptr[0], self._delta)
-
-  def   Execute            (self, object          solution):
-    if   isinstance(solution, ClipperPaths   ): self.ExecuteWithPaths   (<ClipperPaths>   solution)
-    elif isinstance(solution, ClipperPolyTree): self.ExecuteWithPolyTree(<ClipperPolyTree>solution)
+  #these two methods are defined just in case we want to profile
+  cdef void ExecuteP (self, c.Paths    *solution, double delta): self.thisptr[0].Execute(solution[0], delta)
+  cdef void ExecutePT(self, c.PolyTree *solution, double delta): self.thisptr[0].Execute(solution[0], delta)
+  
+  def Execute(self, object solution, double delta=NAN):
+    if isnan(delta): delta = self._delta
+    if   isinstance(solution, ClipperPaths   ): self.ExecuteP ((<ClipperPaths>   solution).thisptr, delta)
+    elif isinstance(solution, ClipperPolyTree): self.ExecutePT((<ClipperPolyTree>solution).thisptr, delta)
     else                                      : raise ValueError('Object of incorrect type: '+type(solution))
 
 

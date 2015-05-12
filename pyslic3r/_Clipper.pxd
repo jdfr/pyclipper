@@ -17,11 +17,13 @@ cdef class ClipperClip:
   cdef  c.PolyFillType clipfill
   cdef  c.ClipType     cliptype
   cpdef bool AddPaths           (self, ClipperPaths    paths, c.PolyType typ, bool pathsAreClosed=*)
-  cpdef bool ExecuteWithPaths   (self, ClipperPaths    solution)
-  cpdef bool ExecuteWithPolyTree(self, ClipperPolyTree solution)
+  cdef  bool ExecuteP           (self, c.Paths    *solution, c.ClipType clipType, c.PolyFillType subjectFillType, c.PolyFillType clipFillType)
+  cdef  bool ExecutePT          (self, c.PolyTree *solution, c.ClipType clipType, c.PolyFillType subjectFillType, c.PolyFillType clipFillType)
 
 cdef class ClipperOffset:
   cdef  c.ClipperOffset *thisptr
   cdef  double _delta
-  cpdef ExecuteWithPaths   (self, ClipperPaths    solution)
-  cpdef ExecuteWithPolyTree(self, ClipperPolyTree solution)
+  cdef  c.JoinType jointype
+  cdef  c.EndType  endtype
+  cdef void ExecuteP (self, c.Paths    *solution, double delta)
+  cdef void ExecutePT(self, c.PolyTree *solution, double delta)
