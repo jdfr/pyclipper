@@ -76,6 +76,18 @@ try:
     else:
       raise Exception('Cannot convert this object type to patches: '+str(type(obj)))
       
+  def contours2path(contours):
+    """helper for object2DToPatches()"""
+    sizes         = n.array([x.shape[0] for x in contours])
+    accums        = n.cumsum(sizes[:-1])
+    vertices      = n.vstack(contours)
+    if vertices.dtype==n.int64:
+      vertices    = vertices.astype(n.float64)*p.scalingFactor
+    codes         = n.full((n.sum(sizes),), Path.LINETO, dtype=int)
+    codes[0]      = Path.MOVETO
+    codes[accums] = Path.MOVETO
+    return Path(vertices, codes)
+
   def show2DObject(obj, sliceindex=0, ax=None, patchArgs=defaultPatchArgs, show=True, returnpatches=False):
     """Universal show function for slice objects. It works for many kinds of objects,
        see objectToPatches() for a list"""
@@ -115,7 +127,8 @@ try:
       return patches
   
   def show2DObjectN(objs, sliceindexes=None, ax=None, patchArgss=None, show=True, returnpatches=False):
-    """use mayavi to plot the sliced model"""
+    """use mayavi to plot a list of objects (mainly for SlicedModels, but should
+    work for the others listed in objectToPatches()'s help"""
     
     if not sliceindexes:
       sliceindexes = [0]
@@ -135,35 +148,43 @@ try:
     if returnpatches:
       return allpatches
   
-  def contours2path(contours):
-    sizes         = n.array([x.shape[0] for x in contours])
-    accums        = n.cumsum(sizes[:-1])
-    vertices      = n.vstack(contours)
-    if vertices.dtype==n.int64:
-      vertices    = vertices.astype(n.float64)*p.scalingFactor
-    codes         = n.full((n.sum(sizes),), Path.LINETO, dtype=int)
-    codes[0]      = Path.MOVETO
-    codes[accums] = Path.MOVETO
-    return Path(vertices, codes)
 
-  def showSlices(data, initindex=0, BB=None, patchArgs=None):
+  def showSlices(data, initindex=0, BB=-1, patchArgs=None):
     """Advanced 2D viewer for SlicedModels or lists of SlicedModels. Use the
-    up/down arrow keys to move up/down in the stack of slices. It hacks the
-    implementation of matplotlib's navigation toolbar to preserve the pan/zoom
-    context"""
+    up/down arrow keys to move up/down in the stack of slices. If provided
+    with a bounding box (parameter BB=(cx, cy, dx, dy)), it maintains the axes
+    limits to that bounding box, and it hacks the implementation of matplotlib's
+    navigation toolbar to preserve the pan/zoom context across slice changes"""
+    
+    #detect if we are dealing with just a SlicedModel or a list of them
     if type(data)==p.SlicedModel:
       modeN = False
-    elif type(data) in [list, tuple]:
+    elif type(data) in [list, tuple] and all(map(lambda x: type(x)==p.SlicedModel, data)):
       modeN = True
     else:
       raise ValueError('data should be a SlicedModel or a list/tuple of SlicedModels')
 
-    useBB = BB is not None
-    fig   = plt.figure(frameon=False)
-    ax    = fig.add_subplot(111, aspect='equal')
-    index = [initindex]
-    patches = [None]
-    usePatches = False
+    #setup of BB:
+    #     -if it is None, we do not use it
+    #     -if it is a number:
+    #           *if data is a list, we set it to the bounding box of the corresponding elememnt in data:
+    #                BB = p.computeSlicedModelBBParams(data[BB])
+    #           *if data is a SlicedModel, we set it to its bounding box:
+    #                BB = p.computeSlicedModelBBParams(data)
+    #     -otherwise, we trust that it is a tuple (cx, cy, dx, dy), such as the tuple produced by computeSlicedModelBBParams
+    if type(BB)==int:
+      if modeN:
+        BB = p.computeSlicedModelBBParams(data[BB])
+      else:
+        BB = p.computeSlicedModelBBParams(data)
+    useBB      = BB is not None
+
+    #initial common setup
+    fig        = plt.figure(frameon=False)
+    ax         = fig.add_subplot(111, aspect='equal')
+    index      = [initindex] #this is a list as a workaround to set the value   index[0] in nested scopes
+    patches    = [None]    #this is a list as a workaround to set the value patches[0] in nested scopes
+    usePatches = False  #hard-coded flag, change if you suspect ax.cla() is causing memory leaks
     txt   = ax.set_title('Layer X/X')
     if useBB:
       cx, cy, dx, dy = BB
@@ -171,6 +192,7 @@ try:
       ax.set_xlim(cx-dx*fac, cx+dx*fac)
       ax.set_ylim(cy-dy*fac, cy+dy*fac)
 
+    #setup for list of SlicedModels
     if modeN:
       if patchArgs is None: patchArgs = defaultPatchArgss
       leng    = lambda x: len(x[0])
@@ -180,6 +202,8 @@ try:
         for patches in allpatches:
           for patch in patches:
             patch.remove()
+            
+    #setup fot single SlicedModel
     else:
       if patchArgs is None: patchArgs = defaultPatchArgs
       leng    = lambda x: len(x)
@@ -188,13 +212,16 @@ try:
       def remove(patches):
         for patch in patches:
           patch.remove()
-      
+
+    #function to draw the figure      
     def paint():
       message = 'Layer %d/%d' % (index[0], leng(data)-1)
-      if useBB: #save the toolbar's view stack, which is reset when clearing axes or adding/removing objects
+      #save the toolbar's view stack, which is reset when clearing axes or adding/removing objects
+      if useBB: 
         t = fig.canvas.toolbar
         views = t._views
         poss  = t._positions
+      #clear the figure and set the title text, depending on the method
       if usePatches:
         if isinstance(patches[0], list):
           remove(patches[0])
@@ -202,17 +229,19 @@ try:
       else:
         ax.cla()
         ax.set_title(message)
+      #draw objects
       patches[0] = showfun(data, ax=ax, show=False, returnpatches=usePatches, **args())
+      #set the toolbar view stack to the previous context
       if useBB: 
         ax.set_xlim(cx-dx*fac, cx+dx*fac)
         ax.set_ylim(cy-dy*fac, cy+dy*fac)
-        #set the toolbar view stack to the previous context
         t = fig.canvas.toolbar
         t._views     = views
         t._positions = poss
         t._update_view()
       fig.canvas.draw()
       
+    #function to receive keypress events to draw the figure      
     def onpress(event):
       key = str(event.key)
       if   key == 'down' and index[0]>0:
@@ -221,16 +250,14 @@ try:
       elif key == 'up'   and index[0]<(leng(data)-1):
         index[0]  += 1
         paint()
-        
+    
+    #finish setup    
     cid   = fig.canvas.mpl_connect('key_press_event', onpress)
     paint()
     plt.show()
     
   def expolygon2path(contour, holes):
     """helper function for slices2Patches"""
-  #  print 'MIRA: '
-  #  print contour.max(axis=0)
-  #  print contour.min(axis=0)
     allpols       = [contour]+holes
     return contours2path(allpols)
     
@@ -242,7 +269,8 @@ try:
     
   def showSlices3D(slicedmodel, fig=None, zfactor=1.0, facecolor='#cccccc', edgecolor='#999999'):
     """use matplotlib to render the slices. The rendering quality is exceptional;
-    it is a shame that matplotlib has no proper 3d navigation support and no proper z buffer"""
+    it is a shame that matplotlib has no proper 3d navigation support and no proper z buffer,
+    so overlapping polygons are messed up"""
     minx = n.inf  
     miny = n.inf  
     minz = n.inf  
