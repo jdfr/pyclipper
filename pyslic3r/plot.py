@@ -28,8 +28,12 @@ try:
   import mpl_toolkits.mplot3d as m3
   import _SlicedModel as p
   import _Clipper as c
+
+  defaultPatchArgs  =   {'facecolor':'#cccccc', 'edgecolor':'#999999', 'lw':1}
+  defaultPatchArgss = [ {'facecolor':'#ff0000', 'edgecolor':'#000000', 'lw':1.5},
+                        {'facecolor':'#0000ff', 'edgecolor':'#000000', 'lw':1} ]
   
-  def object2DToPatches(obj, sliceindex=0, facecolor='#cccccc', edgecolor='#999999'):
+  def object2DToPatches(obj, sliceindex=0, patchArgs=defaultPatchArgs):
     """Universial conversion of objects to iterators of patches. It works for:
         -numpy.ndarray (bi-dimensional, if it is integer, it is scaled with pyslc3r.scalingFactor)
         -pyslic3r.ExPolygon
@@ -42,48 +46,49 @@ try:
         """
     if isinstance(obj, n.ndarray):
       contour = obj
-      return (PathPatch(contours2path([contour]), facecolor=facecolor, edgecolor=edgecolor),)
+      return (PathPatch(contours2path([contour]), **patchArgs),)
     if isinstance(obj, p.ExPolygon):
       expolygon = obj
-      return (PathPatch(expolygon2path(expolygon.contour, expolygon.holes), facecolor=facecolor, edgecolor=edgecolor),)
+      return (PathPatch(expolygon2path(expolygon.contour, expolygon.holes), **patchArgs),)
     if isinstance(obj, p.Layer):
       layer = obj
       return (PathPatch(expolygon2path(exp.contour, exp.holes),
-                        facecolor=facecolor, edgecolor=edgecolor)
+                        **patchArgs)
               for exp in layer.expolygons)
     if isinstance(obj, p.SliceCollection):
       slicecollection = obj
-      return object2DToPatches(slicecollection.slices[sliceindex], facecolor, edgecolor)
+      return object2DToPatches(slicecollection.slices[sliceindex], patchArgs)
     if isinstance(obj, p.SlicedModel):
       slicedmodel = obj
-      return (PathPatch(expolygon2path(exp.contour, exp.holes), facecolor=facecolor, edgecolor=edgecolor)
+      return (PathPatch(expolygon2path(exp.contour, exp.holes), **patchArgs)
                  for exp in slicedmodel[sliceindex,:])
     elif isinstance(obj, c.ClipperPaths):
       clipperpaths = obj
       contours = list(x for x in clipperpaths)
-      return (PathPatch(contours2path(contours), facecolor=facecolor, edgecolor=edgecolor),)
+      return (PathPatch(contours2path(contours), **patchArgs),)
     elif isinstance(obj, c.ClipperPolyTree):
-      return object2DToPatches(c.ClipperObjects2SlicedModel([obj], n.array(0.0)), facecolor, edgecolor)
+      return object2DToPatches(c.ClipperObjects2SlicedModel([obj], n.array(0.0)), patchArgs)
     elif isinstance(obj, list) and all(isinstance(x, n.ndarray) for x in obj):
       contours = obj
-      return (PathPatch(contours2path(contours), facecolor=facecolor, edgecolor=edgecolor),)
+      return (PathPatch(contours2path(contours), **patchArgs),)
     elif hasattr(obj, '__next__'):
       return it.chain(object2DToPatches(x) for x in obj)
     else:
       raise Exception('Cannot convert this object type to patches: '+str(type(obj)))
       
-  def show2DObject(obj, sliceindex=0, fig=None, facecolor='#cccccc', edgecolor='#999999'):
-    """Universial show function for slice objects. It works for many kinds of objects,
+  def show2DObject(obj, sliceindex=0, ax=None, patchArgs=defaultPatchArgs, show=True, returnpatches=False):
+    """Universal show function for slice objects. It works for many kinds of objects,
        see objectToPatches() for a list"""
     minx = n.inf  
     miny = n.inf  
     maxx = -n.inf  
     maxy = -n.inf
     
-    if fig is None:
+    if ax is None:
       fig = plt.figure()
-    ax = fig.add_subplot(111)
-    for patch in object2DToPatches(obj, sliceindex, facecolor, edgecolor):
+      ax  = fig.add_subplot(111, aspect='equal')
+    patches = list(object2DToPatches(obj, sliceindex, patchArgs))
+    for patch in patches:
       ax.add_patch(patch)
       
       vs = patch.get_path().vertices
@@ -104,8 +109,31 @@ try:
     
     ax.set_xbound(cx-maxd, cx+maxd)
     ax.set_ybound(cy-maxd, cy+maxd)
-    plt.show()
+    if show:
+      plt.show()
+    if returnpatches:
+      return patches
   
+  def show2DObjectN(objs, sliceindexes=None, ax=None, patchArgss=None, show=True, returnpatches=False):
+    """use mayavi to plot the sliced model"""
+    
+    if not sliceindexes:
+      sliceindexes = [0]
+    if not patchArgss:
+      patchArgss = defaultPatchArgss
+    if ax is None:
+      fig = plt.figure()
+      ax  = fig.add_subplot(111, aspect='equal')
+    allpatches = [None]*len(objs)
+    
+    for idx, (obj, sliceIndex, patchArgs), in enumerate(it.izip(objs, it.cycle(sliceindexes), it.cycle(patchArgss))):
+      ps = show2DObject(obj, sliceindex=sliceIndex, ax=ax, patchArgs=patchArgs, show=False, returnpatches=returnpatches)
+      if returnpatches:
+        allpatches[idx] = ps
+    if show:
+      plt.show()
+    if returnpatches:
+      return allpatches
   
   def contours2path(contours):
     sizes         = n.array([x.shape[0] for x in contours])
@@ -117,6 +145,86 @@ try:
     codes[0]      = Path.MOVETO
     codes[accums] = Path.MOVETO
     return Path(vertices, codes)
+
+  def showSlices(data, initindex=0, BB=None, patchArgs=None):
+    """Advanced 2D viewer for SlicedModels or lists of SlicedModels. Use the
+    up/down arrow keys to move up/down in the stack of slices. It hacks the
+    implementation of matplotlib's navigation toolbar to preserve the pan/zoom
+    context"""
+    if type(data)==p.SlicedModel:
+      modeN = False
+    elif type(data) in [list, tuple]:
+      modeN = True
+    else:
+      raise ValueError('data should be a SlicedModel or a list/tuple of SlicedModels')
+
+    useBB = BB is not None
+    fig   = plt.figure(frameon=False)
+    ax    = fig.add_subplot(111, aspect='equal')
+    index = [initindex]
+    patches = [None]
+    usePatches = False
+    txt   = ax.set_title('Layer X/X')
+    if useBB:
+      cx, cy, dx, dy = BB
+      fac            = 1.1
+      ax.set_xlim(cx-dx*fac, cx+dx*fac)
+      ax.set_ylim(cy-dy*fac, cy+dy*fac)
+
+    if modeN:
+      if patchArgs is None: patchArgs = defaultPatchArgss
+      leng    = lambda x: len(x[0])
+      showfun = show2DObjectN
+      args    = lambda: dict(patchArgss=patchArgs, sliceindexes=index)
+      def remove(allpatches):
+        for patches in allpatches:
+          for patch in patches:
+            patch.remove()
+    else:
+      if patchArgs is None: patchArgs = defaultPatchArgs
+      leng    = lambda x: len(x)
+      showfun = show2DObject
+      args    = lambda: dict(patchArgs=patchArgs,  sliceindex=index[0])
+      def remove(patches):
+        for patch in patches:
+          patch.remove()
+      
+    def paint():
+      message = 'Layer %d/%d' % (index[0], leng(data)-1)
+      if useBB: #save the toolbar's view stack, which is reset when clearing axes or adding/removing objects
+        t = fig.canvas.toolbar
+        views = t._views
+        poss  = t._positions
+      if usePatches:
+        if isinstance(patches[0], list):
+          remove(patches[0])
+        txt.set_text(message)
+      else:
+        ax.cla()
+        ax.set_title(message)
+      patches[0] = showfun(data, ax=ax, show=False, returnpatches=usePatches, **args())
+      if useBB: 
+        ax.set_xlim(cx-dx*fac, cx+dx*fac)
+        ax.set_ylim(cy-dy*fac, cy+dy*fac)
+        #set the toolbar view stack to the previous context
+        t = fig.canvas.toolbar
+        t._views     = views
+        t._positions = poss
+        t._update_view()
+      fig.canvas.draw()
+      
+    def onpress(event):
+      key = str(event.key)
+      if   key == 'down' and index[0]>0:
+        index[0] -= 1
+        paint()
+      elif key == 'up'   and index[0]<(leng(data)-1):
+        index[0]  += 1
+        paint()
+        
+    cid   = fig.canvas.mpl_connect('key_press_event', onpress)
+    paint()
+    plt.show()
     
   def expolygon2path(contour, holes):
     """helper function for slices2Patches"""
@@ -126,7 +234,6 @@ try:
     allpols       = [contour]+holes
     return contours2path(allpols)
     
-  
   def slices2Patches(slicedmodel, facecolor='#cccccc', edgecolor='#999999'):
     """helper function for showSlices3D"""
     paths     = ((z, expolygon2path(contour, holes)) for _, _, z, contour, holes in slicedmodel.allExPolygons())
