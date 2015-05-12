@@ -127,29 +127,23 @@ cdef class ClipperPaths:
   def reverse(self):
     c.ReversePaths(self.thisptr[0])
   
-  cdef c.Paths * _simplify(self, c.Paths *out, c.PolyFillType fillType=c.pftEvenOdd) nogil:
-    if out==NULL:
-      out = new c.Paths()
-    c.SimplifyPolygons(self.thisptr[0], out[0], fillType)
-    return out
-  
-  def simplify(self, int fillType=c.pftEvenOdd):
-    cdef ClipperPaths out = ClipperPaths()
-    out.thisptr = self._simplify(out.thisptr, <c.PolyFillType>fillType)
+  def simplify(self, int fillType=c.pftEvenOdd, ClipperPaths out=None):
+    if out is None:
+      out = ClipperPaths()
+    else:
+      out.thisptr[0].clear()
+    c.SimplifyPolygons(self.thisptr[0], out.thisptr[0], <c.PolyFillType>fillType)
     return out
 
   def simplifyInPlace(self, int fillType=c.pftEvenOdd):
     c.SimplifyPolygons(self.thisptr[0], <c.PolyFillType>fillType)
   
-  cdef c.Paths * _clean(self, c.Paths *out, double distance=1.415) nogil:
-    if out==NULL:
-      out = new c.Paths()
-    c.CleanPolygons(self.thisptr[0], out[0], distance)
-    return out
-  
-  def clean(self, double distance=1.415):
-    cdef ClipperPaths out = ClipperPaths()
-    out.thisptr = self._clean(out.thisptr, distance)
+  def clean(self, double distance=1.415, ClipperPaths out=None):
+    if out is None:
+      out = ClipperPaths()
+    else:
+      out.thisptr[0].clear()
+    c.CleanPolygons(self.thisptr[0], out.thisptr[0], distance)
     return out
 
   def   cleanInPlace(self, double distance=1.415):
@@ -217,6 +211,8 @@ cdef class ClipperPolyTree:
   def toClipperPaths(self, ClipperPaths paths=None):
     if paths is None:
       paths                 = ClipperPaths()
+    else:
+      paths.thisptr[0].clear()
     paths.thisptr           = self.toPaths(paths.thisptr)
     return paths
   

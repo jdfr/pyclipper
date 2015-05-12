@@ -4,8 +4,6 @@ cimport numpy as cnp
 
 cdef class ClipperPaths:
   cdef  c.Paths   * thisptr
-  cdef  c.Paths   * _simplify       (self, c.Paths *out, c.PolyFillType fillType=*) nogil
-  cdef  c.Paths   * _clean          (self, c.Paths *out, double distance=*) nogil
 
 cdef class ClipperPolyTree:
   cdef c.PolyTree *  thisptr
