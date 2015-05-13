@@ -17,6 +17,7 @@ cdef class ClipperClip:
   cpdef bool AddPaths           (self, ClipperPaths    paths, c.PolyType typ, bool pathsAreClosed=*)
   cdef  bool ExecuteP           (self, c.Paths    *solution, c.ClipType clipType, c.PolyFillType subjectFillType, c.PolyFillType clipFillType)
   cdef  bool ExecutePT          (self, c.PolyTree *solution, c.ClipType clipType, c.PolyFillType subjectFillType, c.PolyFillType clipFillType)
+  cpdef      Execute            (self, object solution, int clipType=*, int subjectFillType=*, int clipFillType=*)
 
 cdef class ClipperOffset:
   cdef  c.ClipperOffset *thisptr
@@ -25,3 +26,5 @@ cdef class ClipperOffset:
   cdef  c.EndType  endtype
   cdef void ExecuteP (self, c.Paths    *solution, double delta)
   cdef void ExecutePT(self, c.PolyTree *solution, double delta)
+  cpdef Execute      (self, object solution, double delta=*)
+  cpdef do           (self, object output,   double delta, ClipperPaths inputs)

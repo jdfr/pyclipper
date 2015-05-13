@@ -278,7 +278,7 @@ cdef class ClipperClip:
   cdef bool ExecuteP (self, c.Paths    *solution, c.ClipType clipType, c.PolyFillType subjectFillType, c.PolyFillType clipFillType): return self.thisptr[0].Execute(clipType, solution[0], subjectFillType, clipFillType)
   cdef bool ExecutePT(self, c.PolyTree *solution, c.ClipType clipType, c.PolyFillType subjectFillType, c.PolyFillType clipFillType): return self.thisptr[0].Execute(clipType, solution[0], subjectFillType, clipFillType)
 
-  def        Execute(self, object solution, int clipType=-1, int subjectFillType=-1, int clipFillType=-1):
+  cpdef      Execute(self, object solution, int clipType=-1, int subjectFillType=-1, int clipFillType=-1):
     if        clipType<0:        clipType = self.cliptype
     if subjectFillType<0: subjectFillType = self.subjectfill
     if    clipFillType<0:    clipFillType = self.clipfill
@@ -286,6 +286,16 @@ cdef class ClipperClip:
     elif isinstance(solution, ClipperPolyTree): return self.ExecutePT((<ClipperPolyTree>solution).thisptr, <c.ClipType>clipType, <c.PolyFillType>subjectFillType, <c.PolyFillType>clipFillType)
     else                                      : raise ValueError('Object of incorrect type: '+type(solution))
 
+  def do(self, object result, int operation, ClipperPaths subject, ClipperPaths clip):
+    """Simple, straightforward use of the engine. Assumes that subject and
+    clip are closed paths, and that the engine is clear. This method clears the
+    before returning"""
+    cdef bool out #avoid stupid C++ warning arising from cython's code generation
+    out = self.thisptr[0].AddPaths(subject.thisptr[0], c.ptSubject, True)
+    out = self.thisptr[0].AddPaths(clip   .thisptr[0], c.ptClip,    True)
+    self.Execute (result, clipType=operation)
+    self.thisptr[0].Clear()
+    return out
 
 cdef class ClipperOffset:
   """Thin wrapper around Clipper::ClipperOffset, to do operations with ClipperPaths"""
@@ -331,11 +341,24 @@ cdef class ClipperOffset:
   cdef void ExecuteP (self, c.Paths    *solution, double delta): self.thisptr[0].Execute(solution[0], delta)
   cdef void ExecutePT(self, c.PolyTree *solution, double delta): self.thisptr[0].Execute(solution[0], delta)
   
-  def Execute(self, object solution, double delta=NAN):
+  cpdef Execute(self, object solution, double delta=NAN):
     if isnan(delta): delta = self._delta
     if   isinstance(solution, ClipperPaths   ): self.ExecuteP ((<ClipperPaths>   solution).thisptr, delta)
     elif isinstance(solution, ClipperPolyTree): self.ExecutePT((<ClipperPolyTree>solution).thisptr, delta)
     else                                      : raise ValueError('Object of incorrect type: '+type(solution))
+
+  cpdef do(self, object output, double delta, ClipperPaths inputs):
+    """Simple, straightforward use of the engine. Assumes that the engine is
+    clear, and clears it before returning"""
+    self.thisptr[0].AddPaths(inputs.thisptr[0], self.jointype, self.endtype)
+    self.Execute(output, delta)
+    self.thisptr[0].Clear()
+
+  def do2(self, object output, double delta1, double delta2, ClipperPaths inputs, ClipperPaths intermediate):
+    """Simple, straightforward use of the engine. Assumes that the engine is
+    clear, and clears it before returning"""
+    self.do(intermediate, delta1, inputs)
+    self.do(output,       delta2, intermediate)
 
 
 #strides have to be computed just once
