@@ -31,7 +31,11 @@ try:
 
   defaultPatchArgs  =   {'facecolor':'#cccccc', 'edgecolor':'#999999', 'lw':1}
   defaultPatchArgss = [ {'facecolor':'#ff0000', 'edgecolor':'#000000', 'lw':1.5},
-                        {'facecolor':'#0000ff', 'edgecolor':'#000000', 'lw':1} ]
+                        {'facecolor':'#0000ff', 'edgecolor':'#000000', 'lw':1},
+                        {'facecolor':'#00ff00', 'edgecolor':'#000000', 'lw':0.75},
+                        {'facecolor':'#00ffff', 'edgecolor':'#000000', 'lw':0.75},
+                        {'facecolor':'#ffff00', 'edgecolor':'#000000', 'lw':0.75},
+                        {'facecolor':'#ff00ff', 'edgecolor':'#000000', 'lw':0.75} ]
   
   def object2DToPatches(obj, sliceindex=0, patchArgs=defaultPatchArgs):
     """Universial conversion of objects to iterators of patches. It works for:
@@ -149,7 +153,7 @@ try:
       return allpatches
   
 
-  def showSlices(data, initindex=0, BB=-1, patchArgs=None):
+  def showSlices(data, fig=None, ax=None, title=None, initindex=0, BB=-1, patchArgs=None, show=True):
     """Advanced 2D viewer for SlicedModels or lists of SlicedModels. Use the
     up/down arrow keys to move up/down in the stack of slices. If provided
     with a bounding box (parameter BB=(cx, cy, dx, dy)), it maintains the axes
@@ -180,9 +184,9 @@ try:
     useBB      = BB is not None
 
     #initial common setup
-    fig        = plt.figure(frameon=False)
-    ax         = fig.add_subplot(111, aspect='equal')
-    index      = [initindex] #this is a list as a workaround to set the value   index[0] in nested scopes
+    if fig is None: fig = plt.figure(frameon=False)
+    if ax  is None: ax  = fig.add_subplot(111, aspect='equal')
+    if title: fig.canvas.set_window_title(title)
     patches    = [None]    #this is a list as a workaround to set the value patches[0] in nested scopes
     usePatches = False  #hard-coded flag, change if you suspect ax.cla() is causing memory leaks
     txt   = ax.set_title('Layer X/X')
@@ -213,6 +217,9 @@ try:
         for patch in patches:
           patch.remove()
 
+    #final setup    
+    index     = [min(max(0, initindex), leng(data)-1)] #this is a list as a workaround to set the value   index[0] in nested scopes
+
     #function to draw the figure      
     def paint():
       message = 'Layer %d/%d' % (index[0], leng(data)-1)
@@ -227,7 +234,8 @@ try:
           remove(patches[0])
         txt.set_text(message)
       else:
-        ax.cla()
+        #ax.cla()
+        ax.clear()
         ax.set_title(message)
       #draw objects
       patches[0] = showfun(data, ax=ax, show=False, returnpatches=usePatches, **args())
@@ -244,17 +252,25 @@ try:
     #function to receive keypress events to draw the figure      
     def onpress(event):
       key = str(event.key)
-      if   key == 'down' and index[0]>0:
+      l   = leng(data)-1
+      if   key == 'down'  and index[0]>0:
         index[0] -= 1
         paint()
-      elif key == 'up'   and index[0]<(leng(data)-1):
+      elif key == 'up'    and index[0]<l:
         index[0]  += 1
+        paint()
+      elif key == 'left'  and index[0]>0:
+        index[0]   = max(0, index[0]-5)
+        paint()
+      elif key == 'right' and index[0]<l:
+        index[0]   = min(l, index[0]+5)
         paint()
     
     #finish setup    
     cid   = fig.canvas.mpl_connect('key_press_event', onpress)
     paint()
-    plt.show()
+    if show:
+      plt.show()
     
   def expolygon2path(contour, holes):
     """helper function for slices2Patches"""
@@ -365,7 +381,7 @@ try:
     if show:
       mlab.show()
   
-  def mayaplotN(slicedmodels, showMesh=True, colormaps=None, linecolors=None):
+  def mayaplotN(slicedmodels, title=None, showMesh=True, colormaps=None, linecolors=None):
     """use mayavi to plot the sliced model"""
     
     if not colormaps:
@@ -373,6 +389,7 @@ try:
     if not linecolors:
       linecolors = [(0,0,0)]
     
+    if title: mlab.figure(figure=title)
     for slicedmodel, cmap, linecol in it.izip(slicedmodels, it.cycle(colormaps), it.cycle(linecolors)):
       mayaplot(slicedmodel, cmap, linecol, showMesh=showMesh, show=False)
     mlab.show()
