@@ -124,6 +124,14 @@ cdef class ClipperPaths:
   def clear(self):
     self.thisptr[0].clear()
   
+  def cloneFrom(self, ClipperPaths other):
+    self.thisptr[0] = other.thisptr[0]
+    
+  def clone(self):
+    cdef ClipperPaths out = ClipperPaths()
+    out.thisptr[0] = self.thisptr[0]
+    return out
+  
   def reverse(self):
     c.ReversePaths(self.thisptr[0])
   
@@ -253,7 +261,7 @@ cdef class ClipperClip:
     def __get__(self):   return self.cliptype
     def __set__(self, int val): self.cliptype    = <c.ClipType>val
 
-  def __cinit__  (self, int clipType=c.ctIntersection, int subjectFillType=c.pftEvenOdd, int clipFillType=c.pftEvenOdd, bool reverseSolution=False, bool strictlySimple=False, bool preserveCollinear=False):
+  def __cinit__  (self, int clipType=c.ctIntersection, int subjectFillType=c.pftEvenOdd, int clipFillType=c.pftEvenOdd, bool reverseSolution=False, bool strictlySimple=False, bool preserveCollinear=False, *args, **kwargs):
     self.thisptr = new c.Clipper()
     self.subjectfill = <c.PolyFillType>subjectFillType
     self.clipfill    = <c.PolyFillType>clipFillType
@@ -320,7 +328,7 @@ cdef class ClipperOffset:
     def __get__(self):      return self.endtype
     def __set__(self, int    val): self.endtype  = <c.EndType> val
 
-  def __cinit__  (self, double miterLimit=3.0, double arcTolerance=3.0, double delta=1.0, int joinType=c.jtRound, int endType=c.etClosedPolygon):
+  def __cinit__  (self, double miterLimit=3.0, double arcTolerance=3.0, double delta=1.0, int joinType=c.jtRound, int endType=c.etClosedPolygon, *args, **kwargs):
     self.thisptr                 = new c.ClipperOffset()
     self._delta                  = delta
     self.jointype                = <c.JoinType>joinType

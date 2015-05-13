@@ -460,6 +460,16 @@ cdef class SlicedModel:
   #MISCELLANEA OF METHODS
   ########################################################################
 
+  def clone(self):
+    """return a copy"""
+    cdef SlicedModel out = SlicedModel(self.zvalues)
+    out.thisptr[0] = self.thisptr[0]
+    return out
+    
+  def cloneEmpty(self):
+    """return a SliceModel with the same (but empty) layers then self"""
+    return SlicedModel(self.zvalues, doresize=True)
+
   @cython.boundscheck(False)  
   def select(self, cnp.ndarray[cnp.int64_t, ndim=1] selectedzs):
     """given an array of layer indexes, returns a new SlicedModel with a copy of
