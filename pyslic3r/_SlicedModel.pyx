@@ -1,14 +1,6 @@
 #cython: embedsignature=True
 
 
-#while in development, we keep the libslic3rlib shared library in the very same
-#directory as this file. In order to enable python to use this, execute this in
-#the command line before entering python (it is necessary only once per bash session):
-#    export LD_LIBRARY_PATH=.   <- or the relevant directory if we are not executing python from here
-#more info: http://serverfault.com/questions/279068/cant-find-so-in-the-same-directory-as-the-executable
-#
-#ALTERNATIVE: A HACK IN __init__.py enables the use of the library without messing with the environment variables
-
 cimport cython
 from libcpp cimport bool
 
