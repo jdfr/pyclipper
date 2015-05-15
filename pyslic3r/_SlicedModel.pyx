@@ -724,11 +724,15 @@ def layersAsTriangleMesh(SlicedModel model):
 cdef void writeAsSVG(SlicedModel model, basestring filename):
   """write a SVG file in the style of slic3r --export-svg"""
   cdef size_t k1, k2, k3
-  cdef double z, cx, cy, dx, dy, sx, sy
+  cdef double z, minx, maxx, miny, maxy, cx, cy, dx, dy, sx, sy
   cdef char space
   cdef FILE *f = fopen(filename, "w")
   cdef cnp.ndarray[cnp.float64_t, ndim=1] zvalues = model.zvalues
-  cx, cy, dx, dy = computeSlicedModelBBParams(model)
+  minx, maxx, miny, maxy = computeSlicedModelBBParams(model)
+  cx = (maxx+minx)/2.0*SCALING_FACTOR
+  cy = (maxy+miny)/2.0*SCALING_FACTOR
+  dx = (maxx-minx)    *SCALING_FACTOR
+  dy = (maxy-miny)    *SCALING_FACTOR
   sx = cx-dx/2
   sy = cy-dy/2
   if f==NULL:
@@ -807,10 +811,12 @@ cdef void writeAsPLY(SlicedModel model, basestring filename):
 
 @cython.boundscheck(False)
 def computeSlicedModelBBParams(SlicedModel model):  
-  """Compute some parameters of the bounding box: the center and the size"""
+  """Compute some parameters of the bounding box: the center and the size.
+  IMPORTANT NOTE: These parameters are computed in the internal int64 coordinates
+  of the SlicedModel, even if the return type is double. Multiply by ScalingFactor
+  to get the scaled float64 coordinates"""
   cdef size_t k1, k2, k3, k4
-  cdef double minx, maxx, miny, maxy, x, y, cx, cy, dx, dy
-  
+  cdef double minx, maxx, miny, maxy, x, y
   minx = miny =  INFINITY
   maxx = maxy = -INFINITY
   for k1 in range(model.thisptr[0].size()):
@@ -830,12 +836,7 @@ def computeSlicedModelBBParams(SlicedModel model):
           miny = min(miny, y)
           maxx = max(maxx, x)
           maxy = max(maxy, y)
-  cx = (maxx+minx)/2*SCALING_FACTOR
-  cy = (maxy+miny)/2*SCALING_FACTOR
-  dx = (maxx-minx)*SCALING_FACTOR
-  dy = (maxy-miny)*SCALING_FACTOR
-  #return (minx, maxx, miny, maxy)
-  return (cx, cy, dx, dy)
+  return (minx, maxx, miny, maxy)
 
     
 @cython.boundscheck(False)
