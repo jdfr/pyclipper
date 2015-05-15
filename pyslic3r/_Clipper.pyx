@@ -6,9 +6,9 @@ from libcpp cimport bool
 cimport Clipper as c
 
 cimport numpy as cnp
-import numpy as np
+import  numpy as  np
 
-from libc.stdio cimport *
+cimport libc.stdio as io
 
 from numpy.math cimport NAN, isnan
 
@@ -20,7 +20,14 @@ cdef extern from "numpy/ndarraytypes.h" nogil:
 
 cimport cpython.ref as ref
 
+import sys
+cdef bool WIN32 = sys.platform == "win32"
+if WIN32:
+  import os, msvcrt
 
+cdef extern from "Python.h":
+    ctypedef struct FILE
+    FILE* PyFile_AsFile(object)
 
 #enum ClipType
 ctIntersection      = c.ctIntersection
@@ -153,6 +160,77 @@ cdef class ClipperPaths:
       out.thisptr[0].clear()
     c.CleanPolygons(self.thisptr[0], out.thisptr[0], distance)
     return out
+
+  cdef toFileObject(self, io.FILE *f):
+    """low level write function"""
+    cdef size_t numpaths = self.thisptr[0].size()
+    cdef size_t k, i, np, bytesize, count
+    cdef c.IntPoint * p
+    count = io.fwrite(&numpaths, sizeof(size_t), 1, f)
+    if count!=1: raise IOError
+    for k in range(numpaths):
+      np = self.thisptr[0][k].size()
+      count = io.fwrite(&np, sizeof(size_t), 1, f)
+      for i in range(np):
+        p = &self.thisptr[0][k][i]
+        count = io.fwrite(&p[0].X, sizeof(c.cInt), 1, f)
+        if count!=1: raise IOError
+        count = io.fwrite(&p[0].Y, sizeof(c.cInt), 1, f)
+        if count!=1: raise IOError
+      
+  cdef fromFileObject(self, io.FILE *f):
+    """low level read function"""
+    cdef size_t count, numpaths, k, i, np, bytesize
+    cdef c.IntPoint * p
+    count = io.fread(&numpaths, sizeof(size_t), 1, f)
+    if count!=1: raise IOError
+    self.thisptr[0].clear()
+    self.thisptr[0].resize(numpaths)
+    for k in range(numpaths):
+      count = io.fread(&np, sizeof(size_t), 1, f)
+      if count!=1: raise IOError
+      self.thisptr[0][k].resize(np)
+      for i in range(np):
+        p = &self.thisptr[0][k][i]
+        count = io.fread(&p[0].X, sizeof(c.cInt), 1, f)
+        if count!=1: raise IOError
+        count = io.fread(&p[0].Y, sizeof(c.cInt), 1, f)
+        if count!=1: raise IOError
+
+  cdef tofromStream(self, bool write, str mode, object stream):
+    """helper for toStream() and fromStream()"""
+    cdef bool doclose = False
+    cdef io.FILE *f
+    if   isinstance(stream, basestring):
+      f = io.fopen(stream, mode)
+      doclose = True
+    else:
+      if stream is None:
+        if write:
+          stream = sys.stdout #f = io.stdout
+        else:
+          stream = sys.stdin  #f = io.stdin
+      if WIN32:
+        msvcrt.setmode(stream.fileno(), os.O_BINARY)
+      f = PyFile_AsFile(stream)
+    if write:    
+      self.toFileObject(f)
+    else:
+      self.fromFileObject(f)
+    if doclose:
+      io.fclose(f)
+  
+  def toStream(self, stream):
+    """write in binary mode. If stream is a string, it is the name of the file to
+    write to. If it is None, data will be written to standard output. Otherwise,
+    it must be a file object. The stdout stream is changed to binary mode, if precise"""
+    self.tofromStream(True, 'wb', stream)
+
+  def fromStream(self, stream):
+    """read in binary mode. If stream is a string, it is the name of the file to
+    read from. If it is None, data will be read from standard output. Otherwise,
+    it must be a file object."""
+    self.tofromStream(False, 'rb', stream)
 
   def   cleanInPlace(self, double distance=1.415):
     c.CleanPolygons(self.thisptr[0], distance)

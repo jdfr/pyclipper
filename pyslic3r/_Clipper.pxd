@@ -1,9 +1,13 @@
-cimport Clipper as c
-from libcpp cimport bool
-cimport numpy as cnp
+cimport Clipper     as c
+from    libcpp cimport bool
+cimport numpy       as cnp
+cimport libc.stdio  as io
 
 cdef class ClipperPaths:
   cdef  c.Paths   * thisptr
+  cdef   toFileObject(self, io.FILE *f)
+  cdef fromFileObject(self, io.FILE *f)
+  cdef   tofromStream(self, bool write, str mode, object stream)
 
 cdef class ClipperPolyTree:
   cdef c.PolyTree *  thisptr
