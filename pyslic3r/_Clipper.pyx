@@ -99,7 +99,7 @@ def arrayListToClipperPaths(list paths, ClipperPaths output=None):
 cdef class ClipperPaths:
   """Thin wrapper around Clipper::Paths. It is intended just as a temporary object
   to do Clipper operations on the data, the end results to be incorporated back
-  into a SlicedModel"""
+  into another kind of object"""
 
   def __cinit__(self):       self.thisptr = new c.Paths()
   def __dealloc__(self): del self.thisptr
@@ -223,13 +223,13 @@ cdef class ClipperPaths:
   def toStream(self, stream):
     """write in binary mode. If stream is a string, it is the name of the file to
     write to. If it is None, data will be written to standard output. Otherwise,
-    it must be a file object. The stdout stream is changed to binary mode, if precise"""
+    it must be a file object. The stream is changed to binary mode, if precise"""
     self.tofromStream(True, 'wb', stream)
 
   def fromStream(self, stream):
     """read in binary mode. If stream is a string, it is the name of the file to
     read from. If it is None, data will be read from standard output. Otherwise,
-    it must be a file object."""
+    it must be a file object. The stream is changed to binary mode, if precise"""
     self.tofromStream(False, 'rb', stream)
 
   def   cleanInPlace(self, double distance=1.415):
@@ -278,7 +278,7 @@ cdef class ClipperPaths:
 cdef class ClipperPolyTree:
   """Thin wrapper around Clipper::PolyTree. It is intended just as a temporary object
   to do Clipper operations on the data, the end results to be incorporated back
-  into a SlicedModel"""
+  into another kind of object"""
 
   def __cinit__(self):       self.thisptr = new c.PolyTree()
   def __dealloc__(self): del self.thisptr
