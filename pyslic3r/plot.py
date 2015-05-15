@@ -21,13 +21,13 @@ try:
 except:
     raise ImportError('could not load NUMPY!')
 
+import _SlicedModel as p
+import _Clipper     as c
+
 try:
-  import matplotlib.pyplot as plt
-  from matplotlib.path import Path
-  from matplotlib.patches import PathPatch
-  import mpl_toolkits.mplot3d as m3
-  import _SlicedModel as p
-  import _Clipper as c
+  import matplotlib.pyplot      as plt
+  from   matplotlib.path    import Path
+  from   matplotlib.patches import PathPatch
 
   defaultPatchArgs  =   {'facecolor':'#cccccc', 'edgecolor':'#999999', 'lw':1}
   defaultPatchArgss = [ {'facecolor':'#ff0000', 'edgecolor':'#000000', 'lw':1.5},
@@ -100,6 +100,11 @@ try:
     codes[0]      = Path.MOVETO
     codes[accums] = Path.MOVETO
     return Path(vertices, codes)
+
+  def expolygon2path(contour, holes):
+    """helper function for object2DToPatches"""
+    allpols       = [contour]+holes
+    return contours2path(allpols)
 
   def getBoundingBox(obj):
     """get the bounding box for a variety of objects"""
@@ -312,11 +317,6 @@ try:
     paint()
     if show:
       plt.show()
-    
-  def expolygon2path(contour, holes):
-    """helper function for slices2Patches"""
-    allpols       = [contour]+holes
-    return contours2path(allpols)
     
 except:
   warn('Could not load MATPLOTLIB. The functions that depend on it have not been defined')
