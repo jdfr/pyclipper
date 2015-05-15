@@ -318,57 +318,6 @@ try:
     allpols       = [contour]+holes
     return contours2path(allpols)
     
-  def slices2Patches(slicedmodel, facecolor='#cccccc', edgecolor='#999999'):
-    """helper function for showSlices3D"""
-    paths     = ((z, expolygon2path(contour, holes)) for _, _, z, contour, holes in slicedmodel.allExPolygons())
-    patches   = ((z, PathPatch(path, facecolor=facecolor, edgecolor=edgecolor)) for z, path in paths)
-    return patches
-    
-  def showSlices3D(slicedmodel, fig=None, zfactor=1.0, facecolor='#cccccc', edgecolor='#999999'):
-    """use matplotlib to render the slices. The rendering quality is exceptional;
-    it is a shame that matplotlib has no proper 3d navigation support and no proper z buffer,
-    so overlapping polygons are messed up"""
-    minx = n.inf  
-    miny = n.inf  
-    minz = n.inf  
-    maxx = -n.inf  
-    maxy = -n.inf
-    maxz = -n.inf
-    
-    if fig is None:
-      fig = plt.figure()
-    ax = m3.Axes3D(fig)
-    for z, patch in slices2Patches(slicedmodel, facecolor, edgecolor):
-      
-      z *= zfactor
-      ax.add_patch(patch)
-      vs = patch.get_path().vertices
-      m3.art3d.pathpatch_2d_to_3d(patch, z)
-      
-      vsmin = vs.min(axis=0)
-      vsmax = vs.max(axis=0)
-      
-      minx = min(minx, vsmin[0])
-      miny = min(miny, vsmin[1])
-      minz = min(minz, z)
-      maxx = max(maxx, vsmax[0])
-      maxy = max(maxy, vsmax[1])
-      maxz = max(maxz, z)
-      
-    cx = (maxx+minx)/2
-    cy = (maxy+miny)/2
-    cz = (maxz+minz)/2
-    dx = (maxx-minx)
-    dy = (maxy-miny)
-    dz = (maxz-minz)
-    
-    maxd = max(dx, dy, dz)*1.1
-    
-    ax.set_xbound(cx-maxd, cx+maxd)
-    ax.set_ybound(cy-maxd, cy+maxd)
-    ax.set_zbound(cz-maxd, cz+maxd)
-    
-    plt.show()
 except:
   warn('Could not load MATPLOTLIB. The functions that depend on it have not been defined')
 
