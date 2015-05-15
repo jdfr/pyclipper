@@ -37,7 +37,7 @@ try:
                         {'facecolor':'#ffff00', 'edgecolor':'#000000', 'lw':0.75},
                         {'facecolor':'#ff00ff', 'edgecolor':'#000000', 'lw':0.75} ]
   
-  def object2DToPatches(obj, sliceindex=0, patchArgs=defaultPatchArgs):
+  def object2DToPatches(obj, sliceindex=None, patchArgs=defaultPatchArgs):
     """Universial conversion of objects to iterators of patches. It works for:
         -numpy.ndarray (bi-dimensional, if it is integer, it is scaled with pyslc3r.scalingFactor)
         -pyslic3r.ExPolygon
@@ -46,7 +46,9 @@ try:
         -pyslic3r.SliceCollection (only the layer specified by sliceindex)
         -pyslic3r.ClipperPaths
         -pyslic3r.ClipperPolyTree
-        -list of any of these objects
+        -list/tuple of any of these objects except SlicedModel/SliceCollection (if sliceindex is not None, only the layer specified by sliceindex)
+        -iterable   of any of these objects except SlicedModel/SliceCollection
+      The result is always an iterable object with a sequence of patches
         """
     if isinstance(obj, n.ndarray):
       contour = obj
@@ -61,9 +63,11 @@ try:
               for exp in layer.expolygons)
     if isinstance(obj, p.SliceCollection):
       slicecollection = obj
-      return object2DToPatches(slicecollection.slices[sliceindex], patchArgs)
+      if sliceindex is None: raise ValueError('if the first argument is a SliceCollection, second argument must be an index')
+      return object2DToPatches(slicecollection.slices[sliceindex], patchArgs=patchArgs)
     if isinstance(obj, p.SlicedModel):
       slicedmodel = obj
+      if sliceindex is None: raise ValueError('if the first argument is a SlicedModel,     second argument must be an index')
       return (PathPatch(expolygon2path(exp.contour, exp.holes), **patchArgs)
                  for exp in slicedmodel[sliceindex,:])
     elif isinstance(obj, c.ClipperPaths):
@@ -71,26 +75,58 @@ try:
       contours = list(x for x in clipperpaths)
       return (PathPatch(contours2path(contours), **patchArgs),)
     elif isinstance(obj, c.ClipperPolyTree):
-      return object2DToPatches(c.ClipperObjects2SlicedModel([obj], n.array(0.0)), patchArgs)
-    elif isinstance(obj, list) and all(isinstance(x, n.ndarray) for x in obj):
-      contours = obj
-      return (PathPatch(contours2path(contours), **patchArgs),)
+      return object2DToPatches(c.ClipperObjects2SlicedModel([obj], n.array(0.0)), patchArgs=patchArgs)
+    elif isinstance(obj, (list, tuple)):
+      if sliceindex is not None:
+        return object2DToPatches(obj[sliceindex], patchArgs=patchArgs)
+      if all(isinstance(x, n.ndarray) for x in obj):
+        contours = obj
+        return (PathPatch(contours2path(contours), **patchArgs),)
+      else:
+        raise Exception('if sliceindex is None and obj is a list or tuple, all elements in obj must be arrays')
     elif hasattr(obj, '__next__'):
-      return it.chain(object2DToPatches(x) for x in obj)
+      return it.chain(object2DToPatches(x, patchArgs=patchArgs) for x in obj)
     else:
       raise Exception('Cannot convert this object type to patches: '+str(type(obj)))
       
   def contours2path(contours):
-    """helper for object2DToPatches()"""
+    """helper function for object2DToPatches()"""
     sizes         = n.array([x.shape[0] for x in contours])
     accums        = n.cumsum(sizes[:-1])
     vertices      = n.vstack(contours)
     if vertices.dtype==n.int64:
-      vertices    = vertices.astype(n.float64)*p.scalingFactor
+      vertices    = vertices*p.scalingFactor
     codes         = n.full((n.sum(sizes),), Path.LINETO, dtype=int)
     codes[0]      = Path.MOVETO
     codes[accums] = Path.MOVETO
     return Path(vertices, codes)
+
+  def getBoundingBox(obj):
+    """get the bounding box for a variety of objects"""
+    if isinstance(obj, p.SlicedModel):
+      return p.computeSlicedModelBBParams(obj)
+    if   isinstance(obj, n.ndarray):
+      minx, miny = obj.min(axis=0)
+      maxx, maxy = obj.max(axis=0)
+      return (minx, maxx, miny, maxy)
+    if isinstance(obj, (list, tuple)):
+      minxs, maxxs, minys, maxys = zip(*[getBoundingBox(x) for x in obj])
+      minx = min(minxs)
+      maxx = max(maxxs)
+      miny = min(minys)
+      maxy = max(maxys)
+      return (minx, maxx, miny, maxy)
+    if isinstance(obj, p.ExPolygon):
+      return getBoundingBox(obj.contour) #no need to bother with the holes
+    if isinstance(obj, p.Layer):
+      return getBoundingBox(obj.expolygons)
+    if isinstance(obj, p.SliceCollection):
+      return getBoundingBox(obj.slices)
+    if isinstance(obj, c.ClipperPaths):
+      return  getBoundingBox([x for x in obj])
+    if isinstance(obj, c.ClipperPolyTree):
+      return getBoundingBox(c.ClipperObjects2SlicedModel([obj], n.array(0.0)))
+    raise Exception('Cannot compute the bounding box for object of type: '+str(type(obj)))
 
   def show2DObject(obj, sliceindex=0, ax=None, patchArgs=defaultPatchArgs, show=True, returnpatches=False):
     """Universal show function for slice objects. It works for many kinds of objects,
@@ -101,9 +137,11 @@ try:
     maxy = -n.inf
     
     if ax is None:
-      fig = plt.figure()
-      ax  = fig.add_subplot(111, aspect='equal')
-    patches = list(object2DToPatches(obj, sliceindex, patchArgs))
+      fig     = plt.figure()
+      ax      = fig.add_subplot(111, aspect='equal')
+    patches   = object2DToPatches(obj, sliceindex, patchArgs)
+    if returnpatches:
+      patches = list(patches)
     for patch in patches:
       ax.add_patch(patch)
       
@@ -153,34 +191,29 @@ try:
       return allpatches
   
 
-  def showSlices(data, fig=None, ax=None, title=None, initindex=0, BB=-1, patchArgs=None, show=True):
-    """Advanced 2D viewer for SlicedModels or lists of SlicedModels. Use the
+  def showSlices(data, modeN=False, fig=None, ax=None, title=None, initindex=0, BB=-1, patchArgs=None, show=True):
+    """Advanced 2D viewer for objects representing sequences of slices (modeN=False)
+    or lists/tuples of such objects to be paint at the same time (modeN=True). Use the
     up/down arrow keys to move up/down in the stack of slices. If provided
     with a bounding box (parameter BB=(cx, cy, dx, dy)), it maintains the axes
     limits to that bounding box, and it hacks the implementation of matplotlib's
     navigation toolbar to preserve the pan/zoom context across slice changes"""
     
     #detect if we are dealing with just a SlicedModel or a list of them
-    if type(data)==p.SlicedModel:
-      modeN = False
-    elif type(data) in [list, tuple] and all(map(lambda x: type(x)==p.SlicedModel, data)):
-      modeN = True
-    else:
-      raise ValueError('data should be a SlicedModel or a list/tuple of SlicedModels')
+    if modeN and not isinstance(data, (list, tuple)):
+      raise ValueError('If modeN==True, data should be a list or tuple')
 
     #setup of BB:
     #     -if it is None, we do not use it
     #     -if it is a number:
-    #           *if data is a list, we set it to the bounding box of the corresponding elememnt in data:
-    #                BB = p.computeSlicedModelBBParams(data[BB])
-    #           *if data is a SlicedModel, we set it to its bounding box:
-    #                BB = p.computeSlicedModelBBParams(data)
-    #     -otherwise, we trust that it is a tuple (cx, cy, dx, dy), such as the tuple produced by computeSlicedModelBBParams
+    #           *if data is a list, we set it to the bounding box of the corresponding elememnt in data
+    #           *if data is a SlicedModel, we set it to its bounding box
+    #     -otherwise, we trust that it is a tuple (minx, maxx, miny, maxy), such as the tuple produced by computeSlicedModelBBParams
     if type(BB)==int:
       if modeN:
-        BB = p.computeSlicedModelBBParams(data[BB])
+        BB = getBoundingBox(data[BB])
       else:
-        BB = p.computeSlicedModelBBParams(data)
+        BB = getBoundingBox(data)
     useBB      = BB is not None
 
     #initial common setup
@@ -191,10 +224,18 @@ try:
     usePatches = False  #hard-coded flag, change if you suspect ax.cla() is causing memory leaks
     txt   = ax.set_title('Layer X/X')
     if useBB:
-      cx, cy, dx, dy = BB
+      minx, maxx, miny, maxy = BB
+      cx = (maxx+minx)/2.0*p.scalingFactor
+      cy = (maxy+miny)/2.0*p.scalingFactor
+      dx = (maxx-minx)    *p.scalingFactor
+      dy = (maxy-miny)    *p.scalingFactor
       fac            = 1.1
-      ax.set_xlim(cx-dx*fac, cx+dx*fac)
-      ax.set_ylim(cy-dy*fac, cy+dy*fac)
+      minx = cx-dx*fac
+      maxx = cx+dx*fac
+      miny = cy-dy*fac
+      maxy = cy+dy*fac
+      ax.set_xlim(minx, maxx)
+      ax.set_ylim(miny, maxy)
 
     #setup for list of SlicedModels
     if modeN:
@@ -241,8 +282,8 @@ try:
       patches[0] = showfun(data, ax=ax, show=False, returnpatches=usePatches, **args())
       #set the toolbar view stack to the previous context
       if useBB: 
-        ax.set_xlim(cx-dx*fac, cx+dx*fac)
-        ax.set_ylim(cy-dy*fac, cy+dy*fac)
+        ax.set_xlim(minx, maxx)
+        ax.set_ylim(miny, maxy)
         t = fig.canvas.toolbar
         t._views     = views
         t._positions = poss
