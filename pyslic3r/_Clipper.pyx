@@ -122,7 +122,7 @@ cdef class ClipperPaths:
       npath = val
       if (npath<0) or (<size_t>npath>=self.thisptr[0].size()):
         raise Exception('Invalid index')
-      return Path2arrayView(self.paths, &self.thisptr[0][npath])
+      return Path2arrayView(self, &self.thisptr[0][npath])
     elif isinstance(val, slice) or isinstance(val, tuple):
       raise Exception('This object does not support slicing, only indexing')
     else:
