@@ -72,7 +72,7 @@ try:
                  for exp in slicedmodel[sliceindex,:])
     elif isinstance(obj, c.ClipperPaths):
       clipperpaths = obj
-      contours = list(x for x in clipperpaths)
+      contours = (x for x in clipperpaths)
       return (PathPatch(contours2path(contours), **patchArgs),)
     elif isinstance(obj, c.ClipperPolyTree):
       return object2DToPatches(c.ClipperObjects2SlicedModel([obj], n.array(0.0)), patchArgs=patchArgs)
@@ -91,6 +91,7 @@ try:
       
   def contours2path(contours):
     """helper function for object2DToPatches()"""
+    contours      = [n.vstack((c, c[0,:])) for c in contours] #close the contours
     sizes         = n.array([x.shape[0] for x in contours])
     accums        = n.cumsum(sizes[:-1])
     vertices      = n.vstack(contours)
