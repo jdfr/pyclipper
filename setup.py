@@ -13,68 +13,40 @@
 # License along with this file. You may obtain a copy of the License at
 # http://www.gnu.org/licenses/agpl-3.0.txt
 
+
 # python setup.py build_ext --inplace
 
-#for this script to work properly, the Slic3r c++ libraries must have been compiled in ../deps/Slic3r/Slic3r-build
+#for this script to work properly, the Slic3r c++ libraries must have been compiled in ./deps/Slic3r/Slic3r-build
 
-import os
-import shutil
+import build as b
 
-from distutils.core      import setup
-from distutils.extension import Extension
-from distutils.sysconfig import get_config_vars
 
-from Cython.Distutils import build_ext
-
-#LD name of the slic3r C++ library
-libnameLD = "slic3rlib" # to link dynamically: refers to "libslic3rlib.so"
-
-#file name of the slic3r C++ library
-libname = 'lib%s.so' % libnameLD
-
-#path of the slic3r C++ library
-libpath = 'deps/Slic3r/Slic3r-build'
+basepath        = '.'
 
 #directory (and name) of the Cython library
-dirname = "pyslic3r"
+dirname         = "pyslic3r"
+
+#path of the slic3r C++ library
+libpath         = 'deps/Slic3r/cmakebuild'
+
+#path to the slic3r C++ library at runtime
+runtimelibdirs  = ["$ORIGIN"]
 
 #Cython modules
-pynames = ["_SlicedModel", "_TriangleMesh"]
+pynames         = ["_SlicedModel", "_TriangleMesh"]
 
-#copy Scli3r c++ library (it should have been build with cmake)
-shutil.copyfile('./%s/%s' % (libpath, libname), './%s/%s' % (dirname, libname))
+#compose the names of the libraries at link time
+libraries       = b.external_libraries(dirname, b.libnamesLD)
 
-#disable these horribly annoying warnings
-(opt,) = get_config_vars('OPT')
-opt += ' -Wno-unused-local-typedefs -Wno-unused-function'
-os.environ['OPT'] = " ".join(
-    flag for flag in opt.split() if flag != '-Wstrict-prototypes'
-)
+description     = "Python wrapper for Scli3r C++ library"
 
-#*.h* include dirs for the cython modules
-includeroot  = "-I./deps/Slic3r/Slic3r/xs/src/"
-includepaths = [includeroot+x for x in ("", "admesh/", "boost/", "poly2tri/", "libscli3r/")]
+additionalSetup = {'package_data': {dirname: b.instantiate_libnames(b.libnamesLD)} }
 
-cflags = []
-
-compileargs = includepaths+cflags
-
-extension_template = lambda name: Extension(
-  "pyslic3r."+name, 
-  sources=["%s/%s.pyx" % (dirname, name)],
-  libraries=["%s/%s" % (dirname, libnameLD)],
-  language="c++",
-  extra_compile_args=compileargs,#+["-fopenmp", "-O3"],
-  extra_objects=[],#"../deps/Slic3r/Slic3r-build/libslic3rlib.a"], #to link statically
-  extra_link_args=[]#"-DSOME_DEFINE_OPT", "-L./some/extra/dependency/dir/"]
-)
-
+additionalExts  = {}
 
 if __name__ == "__main__":
-  # build "pyslic3r.so" python extension to be added to "PYTHONPATH" afterwards...
-  setup(
-      cmdclass    = {'build_ext': build_ext},
-      description = "Python wrapper for Scli3r C++ library",
-      packages    = [dirname],
-      ext_modules = [extension_template(name) for name in pynames]
-  )           
+
+  b.copy_external_libraries(basepath, libpath, dirname, b.libnamesLD)
+  
+  b.dobuild(b.opt, basepath, b.includepaths, dirname, description, runtimelibdirs, libraries, pynames, additionalSetup, additionalExts)
+
