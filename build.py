@@ -57,10 +57,11 @@ def instantiate_includes(basepath, includepaths):
 def external_libraries(dirname, libnamesLD):
   return ["%s/%s" % (dirname, libnameLD) for libnameLD in libnamesLD]
 
-def extension_template(name, dirname, runtimelibdirs, libraries, includes, additional):
+def extension_template(name, dirname, runtimelibdirs, libraries, includes, additional, additionalFiles):
+  print "mira includes: "+str(includes)
   return Extension(
     "%s.%s" % (dirname, name), 
-    sources=["%s/%s.pyx" % (dirname, name)],
+    sources=["%s/%s.pyx" % (dirname, name)]+additionalFiles,
     libraries=libraries,
     runtime_library_dirs=runtimelibdirs,
     language="c++",
@@ -85,7 +86,7 @@ def remove_external_libraries(basepath, dirname, libnamesLD):
   for removepath in libraries_addpath(basepath, dirname, libnamesLD):
     os.remove(removepath)
 
-def dobuild(opt, basepath, includepaths, dirname, description, runtimelibdirs, libraries, pynames, additionalSetup, additionalExtensions):
+def dobuild(opt, basepath, includepaths, dirname, description, runtimelibdirs, libraries, pynames, additionalSetup, additionalExtensions, additionalFiles=[]):
   os.environ['OPT'] = opt
   
   # build "pyslic3r.so" python extension to be added to "PYTHONPATH" afterwards...
@@ -94,7 +95,7 @@ def dobuild(opt, basepath, includepaths, dirname, description, runtimelibdirs, l
       cmdclass    = {'build_ext': build_ext},
       description = description,
       packages    = [dirname],
-      ext_modules = [extension_template(name, dirname, runtimelibdirs, libraries, instantiate_includes(basepath, includepaths), additionalExtensions) for name in pynames],
+      ext_modules = [extension_template(name, dirname, runtimelibdirs, libraries, instantiate_includes(basepath, includepaths), additionalExtensions, additionalFiles) for name in pynames],
       **additionalSetup
   )           
 
