@@ -311,12 +311,6 @@ def showSlices(data, modeN=False, fig=None, ax=None, title=None, initindex=0, BB
     elif key == 'up'    and index[0]<l:
       index[0]  += 1
       paint()
-    elif key == 'left'  and index[0]>0:
-      index[0]   = max(0, index[0]-5)
-      paint()
-    elif key == 'right' and index[0]<l:
-      index[0]   = min(l, index[0]+5)
-      paint()
   
   #finish setup    
   cid   = fig.canvas.mpl_connect('key_press_event', onpress)
