@@ -460,13 +460,13 @@ cdef class SlicedModel:
   #MISCELLANEA OF METHODS
   ########################################################################
 
-  def clone(self):
+  def __copy__(self):
     """return a copy"""
     cdef SlicedModel out = SlicedModel(self.zvalues)
     out.thisptr[0] = self.thisptr[0]
     return out
     
-  def cloneEmpty(self):
+  def copyEmpty(self):
     """return a SliceModel with the same (but empty) layers then self"""
     return SlicedModel(self.zvalues, doresize=True)
 

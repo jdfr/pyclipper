@@ -131,10 +131,10 @@ cdef class ClipperPaths:
   def clear(self):
     self.thisptr[0].clear()
   
-  def cloneFrom(self, ClipperPaths other):
+  def copyFrom(self, ClipperPaths other):
     self.thisptr[0] = other.thisptr[0]
     
-  def clone(self):
+  def __copy__(self):
     cdef ClipperPaths out = ClipperPaths()
     out.thisptr[0] = self.thisptr[0]
     return out
