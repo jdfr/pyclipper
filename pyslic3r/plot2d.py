@@ -202,7 +202,7 @@ def show2DObjectN(objs, sliceindexes=None, ax=None, linestyles=None, patchArgss=
     return allpatches
 
 
-def showSlices(data, modeN=False, fig=None, ax=None, title=None, initindex=0, BB=-1, linestyle=None, patchArgs=None, show=True):
+def showSlices(data, modeN=False, fig=None, ax=None, title=None, initindex=0, BB=-1, linestyle=None, patchArgs=None, show=True, handleEvents=True):
   """Advanced 2D viewer for objects representing sequences of slices (modeN=False)
   or lists/tuples of such objects to be paint at the same time (modeN=True). Use the
   up/down arrow keys to move up/down in the stack of slices. If provided
@@ -276,7 +276,7 @@ def showSlices(data, modeN=False, fig=None, ax=None, title=None, initindex=0, BB
   def paint():
     message = 'Layer %d/%d' % (index[0], leng(data)-1)
     #save the toolbar's view stack, which is reset when clearing axes or adding/removing objects
-    if useBB: 
+    if useBB and handleEvents: 
       t = fig.canvas.toolbar
       views = t._views
       poss  = t._positions
@@ -295,10 +295,11 @@ def showSlices(data, modeN=False, fig=None, ax=None, title=None, initindex=0, BB
     if useBB: 
       ax.set_xlim(minx, maxx)
       ax.set_ylim(miny, maxy)
-      t = fig.canvas.toolbar
-      t._views     = views
-      t._positions = poss
-      t._update_view()
+      if handleEvents:
+        t = fig.canvas.toolbar
+        t._views     = views
+        t._positions = poss
+        t._update_view()
     fig.canvas.draw()
     
   #function to receive keypress events to draw the figure      
@@ -312,8 +313,9 @@ def showSlices(data, modeN=False, fig=None, ax=None, title=None, initindex=0, BB
       index[0]  += 1
       paint()
   
-  #finish setup    
-  cid   = fig.canvas.mpl_connect('key_press_event', onpress)
+  #finish setup  
+  if handleEvents:  
+    cid   = fig.canvas.mpl_connect('key_press_event', onpress)
   paint()
   if show:
     plt.show()
