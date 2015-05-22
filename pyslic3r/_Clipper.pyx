@@ -134,10 +134,12 @@ cdef class ClipperPaths:
   def copyFrom(self, ClipperPaths other):
     self.thisptr[0] = other.thisptr[0]
     
-  def __copy__(self):
+  def copy(self):
     cdef ClipperPaths out = ClipperPaths()
     out.thisptr[0] = self.thisptr[0]
     return out
+
+  def __copy__(self): return self.copy()
   
   def reverse(self):
     c.ReversePaths(self.thisptr[0])
