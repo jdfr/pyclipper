@@ -140,9 +140,15 @@ cdef class ClipperPaths:
     return out
 
   def __copy__(self): return self.copy()
-  
-  def reverse(self):
-    c.ReversePaths(self.thisptr[0])
+
+  @cython.boundscheck(False)
+  def reverse(self, int index=-1):
+    if index<0:
+      c.ReversePaths(self.thisptr[0])
+    else:
+      if (<unsigned int>index)>=self.thisptr[0].size():
+        raise Exception('Invalid index')
+      c.ReversePath(self.thisptr[0][index])
   
   def simplify(self, int fillType=c.pftEvenOdd, ClipperPaths out=None):
     if out is None:
