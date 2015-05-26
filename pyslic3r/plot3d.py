@@ -17,16 +17,14 @@ import itertools as it
 
 import numpy as n
 
-import _SlicedModel as p
-
 from mayavi import mlab
 
-def mayaplot(slicedmodel, cmap='autumn', linecol=(0,0,0), showMesh=True, show=True):
+def mayaplot(slicedmodel, cmap='autumn', linecol=(0,0,0), showMesh=True, show=True, scalingFactor=0.000001):
   """use mayavi to plot a sliced model"""
-  if isinstance(slicedmodel, p.SliceCollection):
+  if hasattr(slicedmodel, 'toSlicedModel'): #isinstance(slicedmodel, _SlicedModel.SliceCollection):
     slicedmodel = slicedmodel.toSlicedModel()
-  if not isinstance(slicedmodel, p.SlicedModel):
-    raise Exception('only SlicedModel objects are supported')
+  if not hasattr(slicedmodel, 'layersAsTriangleMesh'): #isinstance(slicedmodel, _SlicedModel.SlicedModel):
+    raise Exception('only objects able to be represented as triangle meshes with layersAsTriangleMesh() are supported')
   if showMesh:
     #plot surfaces
     ps, triangles = slicedmodel.layersAsTriangleMesh()
@@ -59,8 +57,8 @@ def mayaplot(slicedmodel, cmap='autumn', linecol=(0,0,0), showMesh=True, show=Tr
     conns[startidx, 1] = rang[-1]
     conns[startidx+1:endidx,1] = rang[:-1]
   #put all the processed data into mayavi
-  cyclesx *= p.scalingFactor
-  cyclesy *= p.scalingFactor
+  cyclesx *= scalingFactor
+  cyclesy *= scalingFactor
   src = mlab.pipeline.scalar_scatter(cyclesx,cyclesy,cyclesz)
   src.mlab_source.dataset.lines = conns # Connect them
   lines = mlab.pipeline.stripper(src) # The stripper filter cleans up connected lines
@@ -68,7 +66,7 @@ def mayaplot(slicedmodel, cmap='autumn', linecol=(0,0,0), showMesh=True, show=Tr
   if show:
     mlab.show()
 
-def mayaplotN(slicedmodels, title=None, showMesh=True, colormaps=None, linecolors=None):
+def mayaplotN(slicedmodels, title=None, showMesh=True, colormaps=None, linecolors=None, scalingFactor=0.000001):
   """use mayavi to plot the sliced model"""
   
   if not colormaps:
@@ -78,5 +76,5 @@ def mayaplotN(slicedmodels, title=None, showMesh=True, colormaps=None, linecolor
   
   if title: mlab.figure(figure=title)
   for slicedmodel, cmap, linecol in it.izip(slicedmodels, it.cycle(colormaps), it.cycle(linecolors)):
-    mayaplot(slicedmodel, cmap, linecol, showMesh=showMesh, show=False)
+    mayaplot(slicedmodel, cmap, linecol, showMesh=showMesh, show=False, scalingFactor=scalingFactor)
   mlab.show()
