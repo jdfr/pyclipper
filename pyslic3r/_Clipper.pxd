@@ -7,7 +7,6 @@ cdef class ClipperPaths:
   cdef  c.Paths   * thisptr
   cdef   toFileObject(self, io.FILE *f)
   cdef fromFileObject(self, io.FILE *f)
-  cdef   tofromStream(self, bool write, str mode, object stream)
 
 cdef class ClipperPolyTree:
   cdef c.PolyTree *  thisptr
@@ -32,3 +31,12 @@ cdef class ClipperOffset:
   cdef void ExecutePT(self, c.PolyTree *solution, double delta)
   cpdef Execute      (self, object solution, double delta=*)
   cpdef do           (self, object output,   double delta, ClipperPaths inputs)
+
+  
+cdef class File:
+  cdef io.FILE* f
+  cdef bool     doclose
+  cdef bool     closed
+  cdef bool     write
+  
+  cdef void close(self)

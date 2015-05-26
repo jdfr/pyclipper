@@ -10,7 +10,7 @@ import  numpy as  np
 
 cimport libc.stdio as io
 
-from numpy.math cimport NAN, isnan
+from numpy.math cimport INFINITY, NAN, isnan
 
 #np.import_array()
 cnp.import_array()
@@ -199,41 +199,22 @@ cdef class ClipperPaths:
         count = io.fread(&p[0].Y, sizeof(c.cInt), 1, f)
         if count!=1: raise IOError
 
-  cdef tofromStream(self, bool write, str mode, object stream):
-    """helper for toStream() and fromStream()"""
-    cdef bool doclose = False
-    cdef io.FILE *f
-    if   isinstance(stream, basestring):
-      f = io.fopen(stream, mode)
-      doclose = True
-    else:
-      if stream is None:
-        if write:
-          stream = sys.stdout #f = io.stdout
-        else:
-          stream = sys.stdin  #f = io.stdin
-      if WIN32:
-        msvcrt.setmode(stream.fileno(), os.O_BINARY)
-      f = PyFile_AsFile(stream)
-    if write:    
-      self.toFileObject(f)
-    else:
-      self.fromFileObject(f)
-    if doclose:
-      io.fclose(f)
-  
   def toStream(self, stream):
     """write in binary mode. If stream is a string, it is the name of the file to
     write to. If it is None, data will be written to standard output. Otherwise,
     it must be a file object. The stream is changed to binary mode, if precise"""
-    self.tofromStream(True, 'wb', stream)
-
+    cdef File f = File(stream, 'wb', True)
+    self.toFileObject(f.f)
+    f.close()
+    
   def fromStream(self, stream):
     """read in binary mode. If stream is a string, it is the name of the file to
     read from. If it is None, data will be read from standard output. Otherwise,
     it must be a file object. The stream is changed to binary mode, if precise"""
-    self.tofromStream(False, 'rb', stream)
-
+    cdef File f = File(stream, 'rb', False)
+    self.fromFileObject(f.f)
+    f.close()
+    
   def   cleanInPlace(self, double distance=1.415):
     c.CleanPolygons(self.thisptr[0], distance)
   
@@ -276,7 +257,77 @@ cdef class ClipperPaths:
     p.X = x
     p.Y = y
     return c.PointInPolygon(p, self.thisptr[0][npath])
+
+    
+cdef class File:
+  """Custom and (hopefully) fast lightweight wrapper for files.
+  It works with strings representing file names, or file-like
+  objects, or (if None is provided) redirecting to/from
+  stdin/stdout,always in binary mode"""
   
+  def __cinit__(self, object stream, str mode, bool write):
+    """open a FILE* object"""
+    self.doclose   = False
+    self.write     = write
+    self.closed    = False
+    if   isinstance(stream, basestring):
+      self.f       = io.fopen(stream, mode)
+      self.doclose = True
+    else:
+      if stream is None:
+        if write:
+          stream   = sys.stdout #f = io.stdout
+        else:
+          stream   = sys.stdin  #f = io.stdin
+      if WIN32:
+        msvcrt.setmode(stream.fileno(), os.O_BINARY)
+      self.f       = PyFile_AsFile(stream)
+  
+  cdef void close(self):
+    """close the file just once, if it has to be done"""
+    if self.doclose and self.closed:
+      io.fclose(self.f)
+      self.closed = True
+  
+  def __dealloc__(self):
+    """make sure it is closed"""
+    self.close()
+    
+    
+def ClipperPathsAndZsToStream(c.cInt numpaths, object pathsAndZss, object stream):
+  """from a sequence of pairs (ClipperPaths,z), write to a file or file-like object"""
+  cdef File        f = File(stream, 'wb', True)
+  cdef double      z
+  cdef ClipperPaths paths
+  count = io.fwrite(&numpaths, sizeof(numpaths), 1, f.f)
+  if count!=1: raise IOError
+  for paths,z in pathsAndZss:
+    count = io.fwrite(&z, sizeof(double), 1, f.f)
+    if count!=1: raise IOError
+    paths.toFileObject(f.f)
+  f.close()
+  
+def ClipperPathsAndZsFromStream(object stream, bool alsoYieldNumPaths=False):
+  """for a file or a stream (wrapping a file or file-like object),
+  make a generator yielding pairs (ClipperPaths,z). Optionally, the first yielded
+  object is the number of pairs"""
+  cdef File         f = File(stream, 'rb', False)
+  cdef double       z
+  cdef c.cInt       numpaths
+  cdef int          k
+  cdef ClipperPaths paths
+  count = io.fread(&numpaths, sizeof(numpaths), 1, f.f)
+  if count!=1: raise IOError
+  if alsoYieldNumPaths: yield numpaths
+  for k in range(numpaths):
+    count = io.fread(&z, sizeof(double), 1, f.f)
+    if count!=1: raise IOError
+    paths = ClipperPaths()
+    paths.fromFileObject(f.f)
+    yield (paths,z)
+  f.close()
+  
+    
 cdef class ClipperPolyTree:
   """Thin wrapper around Clipper::PolyTree. It is intended just as a temporary object
   to do Clipper operations on the data, the end results to be incorporated back
