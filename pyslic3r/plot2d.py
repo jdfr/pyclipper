@@ -111,7 +111,7 @@ def expolygon2path(contour, holes):
 def getBoundingBox(obj):
   """get the bounding box for a variety of objects"""
   if isinstance(obj, p.SlicedModel):
-    return p.computeSlicedModelBBParams(obj)
+    return obj.getBoundingBox()
   if   isinstance(obj, n.ndarray):
     minx, miny = obj.min(axis=0)
     maxx, maxy = obj.max(axis=0)
@@ -219,7 +219,7 @@ def showSlices(data, modeN=False, fig=None, ax=None, title=None, initindex=0, BB
   #     -if it is a number:
   #           *if data is a list, we set it to the bounding box of the corresponding elememnt in data
   #           *if data is a SlicedModel, we set it to its bounding box
-  #     -otherwise, we trust that it is a tuple (minx, maxx, miny, maxy), such as the tuple produced by computeSlicedModelBBParams
+  #     -otherwise, we trust that it is a tuple (minx, maxx, miny, maxy), such as the tuple produced by getBoundingBox
   if type(BB)==int:
     if modeN:
       BB = getBoundingBox(data[BB])

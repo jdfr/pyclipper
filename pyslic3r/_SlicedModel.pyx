@@ -524,6 +524,35 @@ cdef class SlicedModel:
       raise IndexError('incorrect Expolygon ID')
     return self.thisptr[0][nlayer][nExpolygon].holes.size()
 
+  @cython.boundscheck(False)
+  def getBoundingBox(self):  
+    """Compute the bounding box.
+    IMPORTANT NOTE: These parameters are computed in the internal int64 coordinates
+    of the SlicedModel, even if the return type is double. Multiply by ScalingFactor
+    to get the scaled float64 coordinates"""
+    cdef size_t k1, k2, k3, k4
+    cdef double minx, maxx, miny, maxy, x, y
+    minx = miny =  INFINITY
+    maxx = maxy = -INFINITY
+    for k1 in range(self.thisptr[0].size()):
+      for k2 in range(self.thisptr[0][k1].size()):
+        for k3 in range(self.thisptr[0][k1][k2].contour.points.size()):
+          x = self.thisptr[0][k1][k2].contour.points[k3].x
+          y = self.thisptr[0][k1][k2].contour.points[k3].y
+          minx = min(minx, x)
+          miny = min(miny, y)
+          maxx = max(maxx, x)
+          maxy = max(maxy, y)
+        for k3 in range(self.thisptr[0][k1][k2].holes.size()):
+          for k4 in range(self.thisptr[0][k1][k2].holes[k3].points.size()):
+            x = self.thisptr[0][k1][k2].holes[k3].points[k4].x
+            y = self.thisptr[0][k1][k2].holes[k3].points[k4].y
+            minx = min(minx, x)
+            miny = min(miny, y)
+            maxx = max(maxx, x)
+            maxy = max(maxy, y)
+    return (minx, maxx, miny, maxy)
+
 #######################################################################
 ########## MERGING SEVERAL SlicedModels TOGETHER ##########
 #######################################################################
@@ -728,7 +757,7 @@ cdef void writeAsSVG(SlicedModel model, basestring filename):
   cdef char space
   cdef FILE *f = fopen(filename, "w")
   cdef cnp.ndarray[cnp.float64_t, ndim=1] zvalues = model.zvalues
-  minx, maxx, miny, maxy = computeSlicedModelBBParams(model)
+  minx, maxx, miny, maxy = model.getBoundingBox()
   cx = (maxx+minx)/2.0*SCALING_FACTOR
   cy = (maxy+miny)/2.0*SCALING_FACTOR
   dx = (maxx-minx)    *SCALING_FACTOR
@@ -809,36 +838,6 @@ cdef void writeAsPLY(SlicedModel model, basestring filename):
     del polss
 
 
-@cython.boundscheck(False)
-def computeSlicedModelBBParams(SlicedModel model):  
-  """Compute some parameters of the bounding box: the center and the size.
-  IMPORTANT NOTE: These parameters are computed in the internal int64 coordinates
-  of the SlicedModel, even if the return type is double. Multiply by ScalingFactor
-  to get the scaled float64 coordinates"""
-  cdef size_t k1, k2, k3, k4
-  cdef double minx, maxx, miny, maxy, x, y
-  minx = miny =  INFINITY
-  maxx = maxy = -INFINITY
-  for k1 in range(model.thisptr[0].size()):
-    for k2 in range(model.thisptr[0][k1].size()):
-      for k3 in range(model.thisptr[0][k1][k2].contour.points.size()):
-        x = model.thisptr[0][k1][k2].contour.points[k3].x
-        y = model.thisptr[0][k1][k2].contour.points[k3].y
-        minx = min(minx, x)
-        miny = min(miny, y)
-        maxx = max(maxx, x)
-        maxy = max(maxy, y)
-      for k3 in range(model.thisptr[0][k1][k2].holes.size()):
-        for k4 in range(model.thisptr[0][k1][k2].holes[k3].points.size()):
-          x = model.thisptr[0][k1][k2].holes[k3].points[k4].x
-          y = model.thisptr[0][k1][k2].holes[k3].points[k4].y
-          minx = min(minx, x)
-          miny = min(miny, y)
-          maxx = max(maxx, x)
-          maxy = max(maxy, y)
-  return (minx, maxx, miny, maxy)
-
-    
 @cython.boundscheck(False)
 cdef void writePolygonSVG(Polygon * pol, FILE * f, bool contour, double cx, double cy) nogil:
   """helper function to write a sliced model to a SVG file in the style of slic3r --export-svg"""
