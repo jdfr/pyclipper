@@ -76,7 +76,7 @@ def object2DToPatches(obj, sliceindex=None, linestyle=None, patchArgs=defaultPat
       paths    = (contours2path(contours),)
     else:
       raise Exception('if sliceindex is None and obj is indexable, all elements in obj must be arrays')
-  elif hasattr(obj, '__next__'):
+  elif hasattr(obj, 'next'):
     return it.chain(object2DToPatches(x, linestyle=linestyle, patchArgs=patchArgs) for x in obj)
   else:
     raise Exception('Cannot convert this object type to patches: '+str(type(obj)))
