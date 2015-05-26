@@ -29,7 +29,7 @@ def mayaplot(slicedmodel, cmap='autumn', linecol=(0,0,0), showMesh=True, show=Tr
     raise Exception('only SlicedModel objects are supported')
   if showMesh:
     #plot surfaces
-    ps, triangles = p.layersAsTriangleMesh(slicedmodel)
+    ps, triangles = slicedmodel.layersAsTriangleMesh()
     mlab.triangular_mesh(ps[:,0], ps[:,1], ps[:,2], triangles, 
                          colormap=cmap, representation='surface')
 

@@ -553,6 +553,44 @@ cdef class SlicedModel:
             maxy = max(maxy, y)
     return (minx, maxx, miny, maxy)
 
+  @cython.boundscheck(False)
+  def layersAsTriangleMesh(self):
+    """return an array of points and an array of triangles, STL style (i. e.,
+    the points are not reused for neighbouring triangles)"""
+    cdef vector[vector[Polygons]] * polss
+    cdef Points * polpoints
+    cdef cnp.ndarray[cnp.float64_t, ndim=2] points
+    cdef cnp.ndarray[cnp.int64_t, ndim=2] triangles
+    cdef size_t numP, numV, k1, k2, k3, k4, kp#, kt
+    cdef cnp.ndarray[cnp.float64_t, ndim=1] zvalues = self.zvalues
+    cdef bool ok = True
+    kp = 0
+    #kt = 0
+  
+    polss = triangulateAllLayers(self)
+    try:
+      countPolygons(polss, &numP, &numV)
+      points    = np.empty((numV, 3), dtype=np.float64)
+      #triangles = np.empty((numP, 3), dtype=np.int64)
+      triangles = np.arange(numV).reshape((-1, 3))
+      for k1 in range(polss[0].size()):
+        z = zvalues[k1]
+        for k2 in range(polss[0][k1].size()):
+          for k3 in range(polss[0][k1][k2].size()):
+            polpoints = &polss[0][k1][k2][k3].points
+            if polpoints[0].size()!=3:
+              raise Exception("Invalid triangulation!")
+            for k4 in range(3):
+              points[kp, 0]    = polpoints[0][k4].x*SCALING_FACTOR
+              points[kp, 1]    = polpoints[0][k4].y*SCALING_FACTOR
+              points[kp, 2]    = z
+              #triangles[kt,k4] = kp
+              kp += 1
+            #kt += 1
+      return (points, triangles)
+    finally:
+      del polss
+
 #######################################################################
 ########## MERGING SEVERAL SlicedModels TOGETHER ##########
 #######################################################################
@@ -706,44 +744,6 @@ cdef vector[vector[Polygons]] * triangulateAllLayers(SlicedModel model) nogil:
     for k2 in range(nexpols):
       model.thisptr[0][k1][k2].triangulate_pp(&polss[0][k1][k2])
   return polss
-
-@cython.boundscheck(False)
-def layersAsTriangleMesh(SlicedModel model):
-  """return an array of points and an array of triangles, STL style (i. e.,
-  the points are not reused for neighbouring triangles)"""
-  cdef vector[vector[Polygons]] * polss
-  cdef Points * polpoints
-  cdef cnp.ndarray[cnp.float64_t, ndim=2] points
-  cdef cnp.ndarray[cnp.int64_t, ndim=2] triangles
-  cdef size_t numP, numV, k1, k2, k3, k4, kp#, kt
-  cdef cnp.ndarray[cnp.float64_t, ndim=1] zvalues = model.zvalues
-  cdef bool ok = True
-  kp = 0
-  #kt = 0
-
-  polss = triangulateAllLayers(model)
-  try:
-    countPolygons(polss, &numP, &numV)
-    points    = np.empty((numV, 3), dtype=np.float64)
-    #triangles = np.empty((numP, 3), dtype=np.int64)
-    triangles = np.arange(numV).reshape((-1, 3))
-    for k1 in range(polss[0].size()):
-      z = zvalues[k1]
-      for k2 in range(polss[0][k1].size()):
-        for k3 in range(polss[0][k1][k2].size()):
-          polpoints = &polss[0][k1][k2][k3].points
-          if polpoints[0].size()!=3:
-            raise Exception("Invalid triangulation!")
-          for k4 in range(3):
-            points[kp, 0]    = polpoints[0][k4].x*SCALING_FACTOR
-            points[kp, 1]    = polpoints[0][k4].y*SCALING_FACTOR
-            points[kp, 2]    = z
-            #triangles[kt,k4] = kp
-            kp += 1
-          #kt += 1
-    return (points, triangles)
-  finally:
-    del polss
 
 #######################################################################
 ########## WRITING TO DISK SlicedModel ##########
