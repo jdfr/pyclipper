@@ -1,3 +1,4 @@
 build
 _SlicedModel.cpp
 _TriangleMesh.cpp
+_Clipper.cpp

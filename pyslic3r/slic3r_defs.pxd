@@ -20,6 +20,8 @@ from libcpp.vector cimport vector
 #from libcpp.string cimport string
 from libcpp cimport bool
 
+cimport  Clipper as  c
+
 cdef extern from "libslic3r/libslic3r.h" nogil:
   ctypedef long coord_t
   ctypedef double coordf_t
@@ -120,48 +122,15 @@ cdef extern from "libslic3r/TriangleMesh.hpp" namespace "Slic3r" nogil:
     #void cut(float z, _TriangleMesh* upper, _TriangleMesh* lower)
     
     
-
-cdef extern from "clipper.hpp" namespace "ClipperLib" nogil:
-  
-  ctypedef signed long long cInt
-  
-  cdef struct IntPoint:
-    cInt X
-    cInt Y
-    
-  ctypedef vector[IntPoint] Path
-  ctypedef vector[Path] Paths
-  
-  cdef enum JoinType:
-    jtSquare, jtRound, jtMiter
     
 cdef extern from "libslic3r/ClipperUtils.hpp" namespace "Slic3r" nogil:
-#NOTE: MOST OF THE FUNCTIONS DECLARED HERE HAVE DEFAULT ARGUMENTS, WHICH HAPPEN
-#TO COINCIDE WITH THE DEFAULT ARGUMENTS DECLARED IN THE *.xsp PERL BINDINGS,
-#AT LEAST IN THE VERSION OF SLIC3R THAT WE ARE USING
-
-  void Slic3rMultiPoint_to_ClipperPath(const MultiPoint &inputt, Path* output)
-  void Slic3rMultiPoints_to_ClipperPaths[T](const T &inputt, Paths* output)
-  void ClipperPath_to_Slic3rMultiPoint[T](const Path &inputt, T* output, bool eraseOutput)
-  void ClipperPaths_to_Slic3rMultiPoints[T](const Paths &inputt, T* output, bool eraseOutput)
-  void ClipperPaths_to_Slic3rExPolygons(const Paths &input, ExPolygons* output, bool eraseOutput)
-  void Add_Slic3rExPolygon_to_ClipperPaths(const _ExPolygon &inputt, Paths* output)
-  void Slic3rExPolygons_to_ClipperPaths(const ExPolygons &inputt, Paths* output)
-  
-  void offset(const Polygons &polygons, ExPolygons* retval, const float delta) except + #version with implicit paramenters
-  void offset(const Polygons &polygons, ExPolygons* retval, const float delta, double scale, JoinType joinType, double miterLimit, bool eraseOutput) except + 
-  void offset(const Polygons &polygons,   Polygons* retval, const float delta) except + #version with implicit paramenters
-  void offset(const Polygons &polygons,   Polygons* retval, const float delta, double scale, JoinType joinType, double miterLimit, bool eraseOutput) except + 
-
-  void offset2(const _ExPolygon  &polygons, ExPolygons* retval, const float delta1, const float delta2, double scale, JoinType joinType, double miterLimit, bool eraseOutput) except + 
-  void offset2(const _ExPolygon  &polygons,   Polygons* retval, const float delta1, const float delta2, double scale, JoinType joinType, double miterLimit, bool eraseOutput) except + 
-#  void offset2(const ExPolygons &polygons, ExPolygons* retval, const float delta1, const float delta2, double scale, JoinType joinType, double miterLimit, bool eraseOutput) except + 
-#  void offset2(const   Polygons &polygons, ExPolygons* retval, const float delta1, const float delta2, double scale, JoinType joinType, double miterLimit, bool eraseOutput) except + 
-#  void offset2(const   Polygons &polygons,   Polygons* retval, const float delta1, const float delta2, double scale, JoinType joinType, double miterLimit, bool eraseOutput) except + 
-
-  void diff [SubjectType, ResultType](const SubjectType &subject, const ExPolygons &clip, ResultType* retval, bool safety_offset_, bool eraseOutput) except + 
-  void diff [SubjectType, ResultType](const SubjectType &subject, const   Polygons &clip, ResultType* retval, bool safety_offset_, bool eraseOutput) except + 
-
-  #to work around a cython bug (trac.cython.org/ticket/848), we instantiate templates to be used within nogil
-  void diff (const ExPolygons &subject, const Polygons &clip, ExPolygons* retval, bool safety_offset_, bool eraseOutput) except + 
+  void AddOuterPolyNodeToExPolygons(c.PolyNode& polynode, ExPolygons& expolygons)
+  void PolyTreeToExPolygons(c.PolyTree& polytree, ExPolygons * expolygons, bool eraseOutput)
+  void Slic3rMultiPoint_to_ClipperPath(const MultiPoint &inputt, c.Path* output)
+  void Slic3rMultiPoints_to_ClipperPaths[T](const T &inputt, c.Paths* output)
+  void ClipperPath_to_Slic3rMultiPoint[T](const c.Path &inputt, T* output, bool eraseOutput)
+  void ClipperPaths_to_Slic3rMultiPoints[T](const c.Paths &inputt, T* output, bool eraseOutput)
+  void ClipperPaths_to_Slic3rExPolygons(const c.Paths &input, ExPolygons* output, bool eraseOutput)
+  void Add_Slic3rExPolygon_to_ClipperPaths(const _ExPolygon &inputt, c.Paths* output)
+  void Slic3rExPolygons_to_ClipperPaths(const ExPolygons &inputt, c.Paths* output)
   
