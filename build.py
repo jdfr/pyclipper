@@ -28,9 +28,14 @@ from distutils.sysconfig import get_config_vars
 
 from Cython.Distutils import build_ext
 
+ALSOSLIC3R = True  #link all C++ libraries
+#ALSOSLIC3R = False #link just the clipper c++ library
 
-#LD name of the slic3r C++ library
-libnamesLD = ["clipper", "slic3rlib"] # to link dynamically: refers to "libslic3rlib.so"
+#LD name of the C++ libraries
+if ALSOSLIC3R:
+  libnamesLD = ["clipper", "slic3rlib"] # to link dynamically: refers to "libslic3rlib.so"
+else:
+  libnamesLD = ["clipper"]
 
 #file name of the slic3r C++ library
 def instantiate_libnames(libnamesLD):
