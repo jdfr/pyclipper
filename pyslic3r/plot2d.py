@@ -17,7 +17,7 @@ import itertools as it
 
 import numpy as n
 
-import _Clipper     as c
+from   . import _Clipper      as c
 
 import matplotlib.pyplot      as plt
 from   matplotlib.path    import Path

@@ -23,8 +23,8 @@ def mayaplot(slicedmodel, cmap='autumn', linecol=(0,0,0), showMesh=True, show=Tr
   """use mayavi to plot a sliced model"""
   if hasattr(slicedmodel, 'toSlicedModel'): #isinstance(slicedmodel, _SlicedModel.SliceCollection):
     slicedmodel = slicedmodel.toSlicedModel()
-  if not hasattr(slicedmodel, 'layersAsTriangleMesh'): #isinstance(slicedmodel, _SlicedModel.SlicedModel):
-    raise Exception('only objects able to be represented as triangle meshes with layersAsTriangleMesh() are supported')
+  if not (hasattr(slicedmodel, 'layersAsTriangleMesh') and hasattr(slicedmodel, 'allExPolygons')): #isinstance(slicedmodel, _SlicedModel.SlicedModel):
+    raise Exception('only objects with the methods layersAsTriangleMesh() and allExPolygons() with the appropriate interfaces (such as pyslic3r.SlicedModel) are supported')
   if showMesh:
     #plot surfaces
     ps, triangles = slicedmodel.layersAsTriangleMesh()
