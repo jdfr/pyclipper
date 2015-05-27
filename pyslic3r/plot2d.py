@@ -310,6 +310,8 @@ def showSlices(data, modeN=False, fig=None, ax=None, title=None, initindex=0, BB
   #finish setup  
   if handleEvents:  
     cid   = fig.canvas.mpl_connect('key_press_event', onpress)
+    #by default, the most common operation is to zoom into some part of the plot
+    fig.canvas.toolbar.zoom()
   paint()
   if show:
     plt.show()
