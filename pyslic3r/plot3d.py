@@ -15,15 +15,15 @@
 
 import itertools as it
 
-import numpy as n
+import numpy     as n
 
-from mayavi import mlab
+from mayavi import  mlab
 
 def mayaplot(slicedmodel, cmap='autumn', linecol=(0,0,0), showMesh=True, show=True, scalingFactor=0.000001):
   """use mayavi to plot a sliced model"""
-  if hasattr(slicedmodel, 'toSlicedModel'): #isinstance(slicedmodel, _SlicedModel.SliceCollection):
+  if hasattr(slicedmodel, 'toSlicedModel'): #isinstance(slicedmodel, SlicedModel.SliceCollection):
     slicedmodel = slicedmodel.toSlicedModel()
-  if not (hasattr(slicedmodel, 'layersAsTriangleMesh') and hasattr(slicedmodel, 'allExPolygons')): #isinstance(slicedmodel, _SlicedModel.SlicedModel):
+  if not (hasattr(slicedmodel, 'layersAsTriangleMesh') and hasattr(slicedmodel, 'allExPolygons')): #isinstance(slicedmodel, SlicedModel.SlicedModel):
     raise Exception('only objects with the methods layersAsTriangleMesh() and allExPolygons() with the appropriate interfaces (such as pyslic3r.SlicedModel) are supported')
   if showMesh:
     #plot surfaces

@@ -13,11 +13,11 @@
 # License along with this file. You may obtain a copy of the License at
 # http://www.gnu.org/licenses/agpl-3.0.txt
 
-import itertools as it
+import itertools              as it
 
-import numpy as n
+import numpy                  as n
 
-from   . import _Clipper      as c
+from   . import Clipper       as c
 
 import matplotlib.pyplot      as plt
 from   matplotlib.path    import Path
@@ -48,13 +48,13 @@ def object2DToPatches(obj, sliceindex=None, linestyle=None, patchArgs=defaultPat
   if isinstance(obj, n.ndarray):
     contour         = obj
     paths           = (contours2path([contour]),)
-  elif  hasattr(obj, 'contour') and hasattr(obj, 'holes'):    #isinstance(obj, _SlicedModel.ExPolygon):
+  elif  hasattr(obj, 'contour') and hasattr(obj, 'holes'):    #isinstance(obj, SlicedModel.ExPolygon):
     expolygon       = obj
     paths           = (expolygon2path(expolygon.contour, expolygon.holes),)
-  elif  hasattr(obj, 'expolygons'): #isinstance(obj, _SlicedModel.Layer):
+  elif  hasattr(obj, 'expolygons'): #isinstance(obj, SlicedModel.Layer):
     layer           = obj
     paths           = (expolygon2path(exp.contour, exp.holes) for exp in layer.expolygons)
-  elif  hasattr(obj, 'slices'):     #isinstance(obj, _SlicedModel.SliceCollection):
+  elif  hasattr(obj, 'slices'):     #isinstance(obj, SlicedModel.SliceCollection):
     slicecollection = obj
     if sliceindex is None: raise ValueError('if the first argument is a SliceCollection, second argument must be an index')
     return object2DToPatches(slicecollection.slices[sliceindex], linestyle=linestyle, patchArgs=patchArgs)
@@ -115,9 +115,9 @@ def getBoundingBox(obj):
     minx, miny = obj.min(axis=0)
     maxx, maxy = obj.max(axis=0)
     return (minx, maxx, miny, maxy)
-  if hasattr(obj, 'contour'):            return getBoundingBox(obj.contour)    #_SlicedModel.ExPolygon, no need to bother with the holes
-  if hasattr(obj, 'expolygons'):         return getBoundingBox(obj.expolygons) #_SlicedModel.Layer
-  if hasattr(obj, 'slices'):             return getBoundingBox(obj.slices)     #_SlicedModel.SliceCollection
+  if hasattr(obj, 'contour'):            return getBoundingBox(obj.contour)    #SlicedModel.ExPolygon, no need to bother with the holes
+  if hasattr(obj, 'expolygons'):         return getBoundingBox(obj.expolygons) #SlicedModel.Layer
+  if hasattr(obj, 'slices'):             return getBoundingBox(obj.slices)     #SlicedModel.SliceCollection
   if isinstance(obj, c.ClipperPaths):    return getBoundingBox([x for x in obj])
   if isinstance(obj, c.ClipperPolyTree): return getBoundingBox(c.ClipperObjects2SlicedModel([obj], n.array(0.0)))
   if hasattr(obj, '__getitem__'):

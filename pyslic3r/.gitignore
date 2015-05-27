@@ -1,4 +1,4 @@
 build
-_SlicedModel.cpp
-_TriangleMesh.cpp
-_Clipper.cpp
+SlicedModel.cpp
+TriangleMesh.cpp
+Clipper.cpp

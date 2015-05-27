@@ -1,23 +1,38 @@
+# Copyright (c) 2015 Jose David Fernandez Rodriguez
+#  
+# This file is distributed under the terms of the
+# GNU Affero General Public License, version 3
+# as published by the Free Software Foundation.
+# 
+# This file is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# Affero General Public License for more details.
+# 
+# You should have received a copy of the GNU Affero General Public
+# License along with this file. You may obtain a copy of the License at
+# http://www.gnu.org/licenses/agpl-3.0.txt
+
 #cython: embedsignature=True
 
 cimport cython
-from libcpp cimport bool
+from libcpp         cimport bool
 
-cimport numpy as cnp
-import numpy as np
+cimport numpy            as cnp
+import  numpy            as  np
 
-import os.path as op
+import os.path           as op
 
-from numpy.math cimport NAN, isnan
+from numpy.math     cimport NAN, isnan
 
-from numbers import Number
+from numbers         import Number
 
 #from libc.stdio cimport printf, puts
 
-from slic3r_defs cimport *
+from    slic3r_defs cimport *
 
-cimport _SlicedModel
-from _SlicedModel cimport SlicedModel
+cimport SlicedModel
+from    SlicedModel cimport SlicedModel
 
 #np.import_array()
 cnp.import_array()

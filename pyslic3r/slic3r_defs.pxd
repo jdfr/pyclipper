@@ -18,9 +18,9 @@
 
 from libcpp.vector cimport vector
 #from libcpp.string cimport string
-from libcpp cimport bool
+from libcpp        cimport bool
 
-cimport  Clipper as  c
+cimport Clipper_defs as  c
 
 cdef extern from "libslic3r/libslic3r.h" nogil:
   ctypedef long coord_t
