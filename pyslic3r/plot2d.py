@@ -91,15 +91,19 @@ def object2DToPatches(obj, sliceindex=None, linestyle=None, patchArgs=defaultPat
     
 def contours2path(contours, scalingFactor=0.000001):
   """helper function for object2DToPatches()"""
-  contours      = [n.vstack((c, c[0,:])) for c in contours] #close the contours
-  sizes         = n.array([x.shape[0] for x in contours])
-  accums        = n.cumsum(sizes[:-1])
-  vertices      = n.vstack(contours)
+  contours        = [n.vstack((c, c[0,:])) for c in contours] #close the contours
+  sizes           = n.array([x.shape[0] for x in contours])
+  accums          = n.cumsum(sizes[:-1])
+  if len(contours)==0:
+    vertices      = n.empty((0,2))
+  else:
+    vertices      = n.vstack(contours)
   if vertices.dtype==n.int64:
-    vertices    = vertices*scalingFactor
-  codes         = n.full((n.sum(sizes),), Path.LINETO, dtype=int)
-  codes[0]      = Path.MOVETO
-  codes[accums] = Path.MOVETO
+    vertices      = vertices*scalingFactor
+  codes           = n.full((n.sum(sizes),), Path.LINETO, dtype=int)
+  if codes.size>0:
+    codes[0]      = Path.MOVETO
+    codes[accums] = Path.MOVETO
   return Path(vertices, codes)
 
 def expolygon2path(contour, holes):
@@ -150,13 +154,14 @@ def show2DObject(obj, sliceindex=0, ax=None, linestyle=None, patchArgs=defaultPa
     
     vs = patch.get_path().vertices
     
-    vsmin = vs.min(axis=0)
-    vsmax = vs.max(axis=0)
-    
-    minx = min(minx, vsmin[0])
-    miny = min(miny, vsmin[1])
-    maxx = max(maxx, vsmax[0])
-    maxy = max(maxy, vsmax[1])
+    if vs.size>0:
+      vsmin = vs.min(axis=0)
+      vsmax = vs.max(axis=0)
+      
+      minx = min(minx, vsmin[0])
+      miny = min(miny, vsmin[1])
+      maxx = max(maxx, vsmax[0])
+      maxy = max(maxy, vsmax[1])
   cx = (maxx+minx)/2
   cy = (maxy+miny)/2
   dx = (maxx-minx)
