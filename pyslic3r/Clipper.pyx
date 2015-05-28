@@ -25,7 +25,10 @@ import  numpy as  np
 
 cimport libc.stdio as io
 
-from numpy.math cimport INFINITY, NAN, isnan
+from libc.math cimport INFINITY, NAN#, isnan
+
+cdef extern from "<cmath>" namespace "std":
+  bint isnan(double x) nogil
 
 #np.import_array()
 cnp.import_array()
@@ -36,9 +39,10 @@ cdef extern from "numpy/ndarraytypes.h" nogil:
 cimport cpython.ref as ref
 
 import sys
-cdef bool WIN32 = sys.platform == "win32"
-if WIN32:
-  import os, msvcrt
+import os
+Windows = os.name=='nt'
+if Windows:
+  import msvcrt
 
 cdef extern from "Python.h":
     ctypedef struct FILE
@@ -317,7 +321,7 @@ cdef class File:
           stream   = sys.stdout #f = io.stdout
         else:
           stream   = sys.stdin  #f = io.stdin
-      if WIN32:
+      if Windows:
         msvcrt.setmode(stream.fileno(), os.O_BINARY)
       self.f       = PyFile_AsFile(stream)
   

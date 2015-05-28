@@ -23,7 +23,10 @@ import  numpy            as  np
 
 import os.path           as op
 
-from numpy.math     cimport NAN, isnan
+from libc.math     cimport NAN#, isnan
+
+cdef extern from "<cmath>" namespace "std":
+  bint isnan(double x) nogil
 
 from numbers         import Number
 

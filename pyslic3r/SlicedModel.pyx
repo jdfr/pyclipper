@@ -29,7 +29,10 @@ from libc.stdio  cimport *
 cimport  Clipper_defs as  c
 cimport  Clipper      as _c
 
-from numpy.math cimport INFINITY#, NAN, isnan
+from libc.math cimport INFINITY#, NAN#, isnan
+
+#cdef extern from "<cmath>" namespace "std":
+#  bint isnan(double x) nogil
 
 import itertools as it
 
