@@ -303,33 +303,34 @@ cdef class ClipperPaths:
     
 cdef class File:
   """Custom and (hopefully) fast lightweight wrapper for files.
-  It works with strings representing file names, or file-like
-  objects, or (if None is provided) redirecting to/from
-  stdin/stdout,always in binary mode"""
+  It works with strings representing file names, or stdin/stdout
+  if None is provided (forcing them to binary mode)"""
   
-  def __cinit__(self, object stream, str mode, bool write):
+  def __cinit__(self, object stream, str mode="wb", bool write=True):
     """open a FILE* object"""
-    self.doclose   = False
+    cdef fileno
     self.write     = write
-    self.closed    = False
     if   isinstance(stream, basestring):
-      self.f       = io.fopen(stream, mode)
       self.doclose = True
-    else:
-      if stream is None:
-        if write:
-          stream   = sys.stdout #f = io.stdout
-        else:
-          stream   = sys.stdin  #f = io.stdin
+      self.f       = io.fopen(stream, mode)
+    elif stream is None:
+      self.doclose = False
+      if write:
+        stream     = sys.stdout #f = io.stdout
+      else:
+        stream     = sys.stdin  #f = io.stdin
+      fileno       = stream.fileno()
       if Windows:
-        msvcrt.setmode(stream.fileno(), os.O_BINARY)
-      self.f       = PyFile_AsFile(stream)
+        msvcrt.setmode(fileno, os.O_BINARY)
+      self.f       = io.fdopen(fileno, mode)
+    else:
+      raise IOError("This class can only open new files or reopen stdin/stdout")
   
   cdef void close(self):
     """close the file just once, if it has to be done"""
-    if self.doclose and self.closed:
+    if self.doclose:
       io.fclose(self.f)
-      self.closed = True
+      self.doclose = False
   
   def __dealloc__(self):
     """make sure it is closed"""
