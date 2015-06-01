@@ -54,7 +54,7 @@ ADD_DEFINITIONS(-D_GLIBCXX_USE_C99 -DNOGDI)
 #BUT BE AWARE THAT THEY WILL IMPLY RECOMPILATION OF ALL FILES
 option(DODEBUG           "compile with debug  messages" OFF)
 option(DOTIMING          "compile with timing messages" OFF)
-option(DONOTUSEPOLY2TRI  "disable functions that require the use of poly2tri" ON)
+option(DONOTUSEPOLY2TRI  "disable functions that require the use of poly2tri" OFF)
 option(FULLLIBRARY       "include all sources in the library" OFF)
 
 set(MASK "/*.c*") #*.c, *.cc, *.cpp
