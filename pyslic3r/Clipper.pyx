@@ -336,37 +336,45 @@ cdef class File:
     self.close()
     
     
-def ClipperPathsAndZsToStream(c.cInt numpaths, object pathsAndZss, object stream):
+def ClipperPathsAndZsToStream(c.cInt npths, object pathsAndZss, object stream):
   """from a sequence of pairs (ClipperPaths,z), write to a file or file-like object"""
-  cdef File        f = File(stream, 'wb', True)
-  cdef double      z
+  cdef File         f = File(stream, 'wb', True)
+  cdef double       z
   cdef ClipperPaths paths
-  count = io.fwrite(&numpaths, sizeof(numpaths), 1, f.f)
-  if count!=1: raise IOError
-  for paths,z in pathsAndZss:
-    count = io.fwrite(&z, sizeof(double), 1, f.f)
-    if count!=1: raise IOError
+  cdef c.cInt       numz
+  if     io.fwrite(&npths, sizeof(npths),  1, f.f)!=1: raise IOError
+  for paths,zs in pathsAndZss:
+    if not hasattr(zs, '__len__'):
+      zs    = (zs,)
+    numz    = len(zs)
+    if   io.fwrite(&numz,  sizeof(numz),   1, f.f)!=1: raise IOError
+    for z in zs:
+      if io.fwrite(&z,     sizeof(double), 1, f.f)!=1: raise IOError
     paths.toFileObject(f.f)
   f.close()
   
+@cython.boundscheck(False)
 def ClipperPathsAndZsFromStream(object stream, bool alsoYieldNumPaths=False):
   """for a file or a stream (wrapping a file or file-like object),
   make a generator yielding pairs (ClipperPaths,z). Optionally, the first yielded
   object is the number of pairs"""
   cdef File         f = File(stream, 'rb', False)
   cdef double       z
-  cdef c.cInt       numpaths
-  cdef int          k
+  cdef cnp.ndarray  zs
+  cdef c.cInt       npths, numz
+  cdef int          k, m
   cdef ClipperPaths paths
-  count = io.fread(&numpaths, sizeof(numpaths), 1, f.f)
-  if count!=1: raise IOError
-  if alsoYieldNumPaths: yield numpaths
-  for k in range(numpaths):
-    count = io.fread(&z, sizeof(double), 1, f.f)
-    if count!=1: raise IOError
+  if     io.fread(&npths, sizeof(npths),  1, f.f)!=1: raise IOError
+  if alsoYieldNumPaths: yield npths
+  for k in range(npths):
+    if   io.fread(&numz,  sizeof(numz),   1, f.f)!=1: raise IOError
+    zs      = np.empty((numz,))
+    for m in range(numz):
+      if io.fread(&z,     sizeof(double), 1, f.f)!=1: raise IOError
+      zs[m] = z
     paths = ClipperPaths()
     paths.fromFileObject(f.f)
-    yield (paths,z)
+    yield (paths,zs)
   f.close()
   
     
