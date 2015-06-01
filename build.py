@@ -63,7 +63,6 @@ def external_libraries(dirname, libnamesLD):
   return ["%s/%s" % (dirname, libnameLD) for libnameLD in libnamesLD]
 
 def extension_template(name, dirname, runtimelibdirs, libraries, includes, additional, additionalFiles):
-  print "mira includes: "+str(includes)
   return Extension(
     "%s.%s" % (dirname, name), 
     sources=["%s/%s.pyx" % (dirname, name)]+additionalFiles,
