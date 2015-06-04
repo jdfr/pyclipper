@@ -338,7 +338,8 @@ cdef class File:
     
     
 def ClipperPathsAndZsToStream(c.cInt npths, object pathsAndZss, object stream):
-  """from a sequence of pairs (ClipperPaths,z), write to a file or file-like object"""
+  """from a sequence of pairs (ClipperPaths,zs), where zs is itself a sequence of double values,
+  write to a filename, a file object or stdout (if stream is None)"""
   cdef File         f = File(stream, 'wb', True)
   cdef double       z
   cdef ClipperPaths paths
@@ -356,9 +357,9 @@ def ClipperPathsAndZsToStream(c.cInt npths, object pathsAndZss, object stream):
   
 @cython.boundscheck(False)
 def ClipperPathsAndZsFromStream(object stream, bool alsoYieldNumPaths=False):
-  """for a file or a stream (wrapping a file or file-like object),
-  make a generator yielding pairs (ClipperPaths,z). Optionally, the first yielded
-  object is the number of pairs"""
+  """for a file or a stream (wrapping a filename, a file-like object or stdin if 
+  stream is None), make a generator yielding pairs (ClipperPaths,zs), where zs is a 
+  sequence of doubles. Optionally, the first yielded object is the number of pairs"""
   cdef File         f = File(stream, 'rb', False)
   cdef double       z
   cdef cnp.ndarray  zs
