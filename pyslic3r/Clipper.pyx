@@ -208,38 +208,31 @@ cdef class ClipperPaths:
   cdef toFileObject(self, io.FILE *f):
     """low level write function"""
     cdef size_t numpaths = self.thisptr[0].size()
-    cdef size_t k, i, np, bytesize, count
+    cdef size_t k, i, np, bytesize
     cdef c.IntPoint * p
-    count = io.fwrite(&numpaths, sizeof(size_t), 1, f)
-    if count!=1: raise IOError
+    if     io.fwrite(&numpaths, sizeof(size_t), 1, f)!=1: raise IOError
     for k in range(numpaths):
       np = self.thisptr[0][k].size()
-      count = io.fwrite(&np, sizeof(size_t), 1, f)
+      if   io.fwrite(&np,       sizeof(size_t), 1, f)!=1: raise IOError
       for i in range(np):
         p = &self.thisptr[0][k][i]
-        count = io.fwrite(&p[0].X, sizeof(c.cInt), 1, f)
-        if count!=1: raise IOError
-        count = io.fwrite(&p[0].Y, sizeof(c.cInt), 1, f)
-        if count!=1: raise IOError
+        if io.fwrite(&p[0].X,   sizeof(c.cInt), 1, f)!=1: raise IOError
+        if io.fwrite(&p[0].Y,   sizeof(c.cInt), 1, f)!=1: raise IOError
       
   cdef fromFileObject(self, io.FILE *f):
     """low level read function"""
-    cdef size_t count, numpaths, k, i, np, bytesize
+    cdef size_t numpaths, k, i, np, bytesize
     cdef c.IntPoint * p
-    count = io.fread(&numpaths, sizeof(size_t), 1, f)
-    if count!=1: raise IOError
+    if     io.fread(&numpaths, sizeof(size_t), 1, f)!=1: raise IOError
     self.thisptr[0].clear()
     self.thisptr[0].resize(numpaths)
     for k in range(numpaths):
-      count = io.fread(&np, sizeof(size_t), 1, f)
-      if count!=1: raise IOError
+      if   io.fread(&np,       sizeof(size_t), 1, f)!=1: raise IOError
       self.thisptr[0][k].resize(np)
       for i in range(np):
         p = &self.thisptr[0][k][i]
-        count = io.fread(&p[0].X, sizeof(c.cInt), 1, f)
-        if count!=1: raise IOError
-        count = io.fread(&p[0].Y, sizeof(c.cInt), 1, f)
-        if count!=1: raise IOError
+        if io.fread(&p[0].X,   sizeof(c.cInt), 1, f)!=1: raise IOError
+        if io.fread(&p[0].Y,   sizeof(c.cInt), 1, f)!=1: raise IOError
 
   def toStream(self, stream):
     """write in binary mode. If stream is a string, it is the name of the file to
