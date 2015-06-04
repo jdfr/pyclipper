@@ -14,13 +14,13 @@
 # http://www.gnu.org/licenses/agpl-3.0.txt
 
 
-import build
-import shutil
+import cleanutils
+#import shutil
 
 #remove root cmakebuild
-build.erasedircontents('cmakebuild')
+cleanutils.erasedircontents('cmakebuild')
 
 #remove Slic3r's cmakebuild and source
-build.erasedircontents('deps/Slic3r/cmakebuild')
+cleanutils.erasedircontents('deps/Slic3r/cmakebuild')
 #do not remove Slic3r's source
 #shutil.rmtree         ('deps/Slic3r/Slic3r')

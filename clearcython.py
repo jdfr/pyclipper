@@ -14,15 +14,14 @@
 # http://www.gnu.org/licenses/agpl-3.0.txt
 
 
-import build
-import setup
+import cleanutils as c
+import setup      as s
+import os
 
-#clean *.pyc, and cython build files
-build.doClean(setup.dirname,
-              setup.pynames)
+#clean working directory
+c.doClean(s.dirname, s.pynames)
 
 #remove *.so libraries
-build.remove_external_libraries(setup.basepath,
-                                setup.dirname,
-                                build.libnamesLD)
-
+if not s.WINDOWS:
+  for removepath in s.libnamesDest:
+    os.remove(removepath)
