@@ -289,7 +289,7 @@ cdef class SlicedModel:
   ########################################################################
 
   @cython.boundscheck(False)
-  def toSliceCollection(self, bool asInteger=False, bool asView=False, rang=None):
+  def toSliceCollection(self, bool asInteger=True, bool asView=False, rang=None):
     """Same as toLayerList, but returns the list of layers wrapped in a SliceCollection
     object. This will be useful if SliceCollection acquires more attributes,
     for example if SCALING_FACTOR is un-hardcoded and moved to SlicedModel"""
@@ -298,7 +298,7 @@ cdef class SlicedModel:
     return SliceCollection(self.toLayerList(asInteger, asView, rang))
       
   @cython.boundscheck(False)
-  cpdef object toLayerList(self, bool asInteger=False, bool asView=False, rang=None):
+  cpdef object toLayerList(self, bool asInteger=True, bool asView=False, rang=None):
     """return a full-fledged pythonic representation of the layers of this
     SlicedModel object, as a list of Layer objects (all attributes fully pythonic,
     so it is easier to manipulate in python (removing and adding things
@@ -326,14 +326,14 @@ cdef class SlicedModel:
     return ret
 
   @cython.boundscheck(False)  
-  cpdef object toExPolygonList(self, size_t nlayer, bool asInteger=False, bool asView=False, rang=None):
+  cpdef object toExPolygonList(self, size_t nlayer, bool asInteger=True, bool asView=False, rang=None):
     """same as toLayerList(), but for ExPolygons"""
     if nlayer>=self.thisptr[0].size():
       raise IndexError('incorrect layer ID')
     return self._toExPolygonList(nlayer, asInteger, asView, rang)
 
   @cython.boundscheck(False)  
-  cdef object _toExPolygonList(self, size_t nlayer, bool asInteger=False, bool asView=False, rang=None):
+  cdef object _toExPolygonList(self, size_t nlayer, bool asInteger=True, bool asView=False, rang=None):
     """same as toLayerList(), but for ExPolygons"""
     if nlayer>=self.thisptr[0].size():
       raise IndexError('incorrect layer ID')
@@ -347,7 +347,7 @@ cdef class SlicedModel:
     return ret
 
   @cython.boundscheck(False)  
-  cpdef object toHoleList(self, size_t nlayer, size_t nexp, bool asInteger=False, bool asView=False, rang=None):
+  cpdef object toHoleList(self, size_t nlayer, size_t nexp, bool asInteger=True, bool asView=False, rang=None):
     """same as toLayerList(), but for holes"""
     if nlayer>=self.thisptr[0].size():
       raise IndexError('incorrect layer ID')
@@ -356,7 +356,7 @@ cdef class SlicedModel:
     return self._toHoleList(nlayer, nexp, asInteger, asView, rang)
     
   @cython.boundscheck(False)  
-  cdef object _toHoleList(self, size_t nlayer, size_t nexp, bool asInteger=False, bool asView=False, rang=None):
+  cdef object _toHoleList(self, size_t nlayer, size_t nexp, bool asInteger=True, bool asView=False, rang=None):
     """same as toLayerList(), but for holes"""
     cdef bool justInteger
     rango = slice2xrange(self.thisptr[0][nlayer][nexp].holes.size(), &justInteger, rang)
@@ -382,7 +382,7 @@ cdef class SlicedModel:
         return Polygon2arrayF(pol)
 
   @cython.boundscheck(False)  
-  def contour(self, size_t nlayer, size_t nExpolygon, bool asInteger=False, bool asView=False):
+  def contour(self, size_t nlayer, size_t nExpolygon, bool asInteger=True, bool asView=False):
     """contour (as an array representing a list of points) of an ExPolygon of a layer of the sliced model"""
     if nlayer>=self.thisptr[0].size():
       raise IndexError('incorrect layer ID')
@@ -391,7 +391,7 @@ cdef class SlicedModel:
     return self.Polygon2array(&self.thisptr[0][nlayer][nExpolygon].contour, asInteger, asView)
     
   @cython.boundscheck(False)  
-  def hole(self, size_t nlayer, size_t nExpolygon, size_t nhole, bool asInteger=False, bool asView=False):
+  def hole(self, size_t nlayer, size_t nExpolygon, size_t nhole, bool asInteger=True, bool asView=False):
     """hole (as an array representing a list of points) of an ExPolygon of a layer of the sliced model"""
     if nlayer>=self.thisptr[0].size():
       raise IndexError('incorrect layer ID')
@@ -402,7 +402,7 @@ cdef class SlicedModel:
     return self.Polygon2array(&self.thisptr[0][nlayer][nExpolygon].holes[nhole], asInteger, asView)
 
   @cython.boundscheck(False)
-  def allExPolygons(self, bool asInteger=False, asView=False):
+  def allExPolygons(self, bool asInteger=True, asView=False):
     """return a generator for all expolygons in all layers. Each ExPolygon is
     returned as a tuple with a layer index, an expolygon index (within the layer),
     a layer depth (z value), a contour and a list of holes. The contour and the
@@ -962,8 +962,8 @@ cdef class Layer:
     self._z          = d['_z']
     self._expolygons = d['_exps']
     
-  def __len__(self):          return len(self._expolygons)
-  def __iter__(self):         return self._slices.__iter__()
+  def __len__(self):          return self._expolygons.__len__()
+  def __iter__(self):         return self._expolygons.__iter__()
   def __getitem__(self, val): return self._expolygons.__getitem__(val)
 
   #Do not implement __setitem__, since this object's data may belong to a SlicedModel,
