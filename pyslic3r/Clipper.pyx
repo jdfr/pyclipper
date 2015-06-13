@@ -302,7 +302,7 @@ cdef class File:
   def __cinit__(self, object stream, str mode="wb", bool write=True):
     """open a FILE* object"""
     cdef fileno
-    self.write     = write
+    self.iswrite   = write
     if   isinstance(stream, basestring):
       self.doclose = True
       self.f       = io.fopen(stream, mode)
@@ -319,24 +319,53 @@ cdef class File:
     else:
       raise IOError("This class can only open new files or reopen stdin/stdout")
   
-  cdef void close(self):
+  cpdef close(self):
     """close the file just once, if it has to be done"""
     if self.doclose:
       io.fclose(self.f)
       self.doclose = False
   
+  cpdef flush(self):
+    """flush the buffers"""
+    io.fflush(self.f)
+  
+  #it is redundant to expose these methods, but we need them upstream
+  def readDouble(self):
+    cdef double v
+    if io.fread(&v, sizeof(v),  1, self.f)!=1: raise IOError
+    return v  
+  
+  def readInt64(self):
+    cdef cnp.int64_t v
+    if io.fread(&v, sizeof(v),  1, self.f)!=1: raise IOError
+    return v
+
+  def write(self, object v):
+    cdef cnp.int64_t v1
+    cdef double      v2
+    if   isinstance(v, int):
+      v1 = v
+      if io.fwrite(&v1, sizeof(v1), 1, self.f)!=1: raise IOError
+    elif isinstance(v, float):
+      v2 = v
+      if io.fwrite(&v2, sizeof(v2), 1, self.f)!=1: raise IOError
+    else:
+      raise IOError
+  
   def __dealloc__(self):
     """make sure it is closed"""
     self.close()
-    
-    
+
 def ClipperPathsAndZsToStream(c.cInt npths, object pathsAndZss, object stream):
   """from a sequence of pairs (ClipperPaths,zs), where zs is itself a sequence of double values,
   write to a filename, a file object or stdout (if stream is None)"""
-  cdef File         f = File(stream, 'wb', True)
+  cdef bool         isfile = isinstance(stream, File)
+  cdef File         f
   cdef double       z
   cdef ClipperPaths paths
   cdef c.cInt       numz
+  if isfile: f = stream
+  else:      f = File(stream, 'wb', True)
   if     io.fwrite(&npths, sizeof(npths),  1, f.f)!=1: raise IOError
   for paths,zs in pathsAndZss:
     if not hasattr(zs, '__len__'):
@@ -346,19 +375,23 @@ def ClipperPathsAndZsToStream(c.cInt npths, object pathsAndZss, object stream):
     for z in zs:
       if io.fwrite(&z,     sizeof(double), 1, f.f)!=1: raise IOError
     paths.toFileObject(f.f)
-  f.close()
+  if not isfile:
+    f.close()
   
 @cython.boundscheck(False)
 def ClipperPathsAndZsFromStream(object stream, bool alsoYieldNumPaths=False):
   """for a file or a stream (wrapping a filename, a file-like object or stdin if 
   stream is None), make a generator yielding pairs (ClipperPaths,zs), where zs is a 
   sequence of doubles. Optionally, the first yielded object is the number of pairs"""
-  cdef File         f = File(stream, 'rb', False)
+  cdef bool         isfile = isinstance(stream, File)
+  cdef File         f
   cdef double       z
   cdef cnp.ndarray  zs
   cdef c.cInt       npths, numz
   cdef int          k, m
   cdef ClipperPaths paths
+  if isfile: f = stream
+  else:      f = File(stream, 'rb', False)
   if     io.fread(&npths, sizeof(npths),  1, f.f)!=1: raise IOError
   if alsoYieldNumPaths: yield npths
   for k in range(npths):
@@ -370,7 +403,8 @@ def ClipperPathsAndZsFromStream(object stream, bool alsoYieldNumPaths=False):
     paths = ClipperPaths()
     paths.fromFileObject(f.f)
     yield (paths,zs)
-  f.close()
+  if not isfile:
+    f.close()
   
     
 cdef class ClipperPolyTree:
