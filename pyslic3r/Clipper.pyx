@@ -76,6 +76,16 @@ etOpenButt          = c.etOpenButt
 etOpenSquare        = c.etOpenSquare
 etOpenRound         = c.etOpenRound
 
+DEF DEBUG = False
+DEBUGMODE = DEBUG #expose the compile-time directive to python
+DEBUGPATH = "debug.Clipper.pyx.log" #this can be overriden by callers
+
+cpdef writeDebug(msg):
+  """Quick and dirty internal logging facility"""
+  #originally for debugging the IO workflow when executing the process without a console
+  with open(DEBUGPATH, 'a') as f:
+    f.write(msg)
+
 cdef class ClipperPathsIterator:
   cdef ClipperPaths paths
   cdef size_t current
@@ -210,29 +220,36 @@ cdef class ClipperPaths:
     cdef size_t numpaths = self.thisptr[0].size()
     cdef size_t k, i, np, bytesize
     cdef c.IntPoint * p
+    IF DEBUG:     writeDebug("  WRITING A CLIPPERPATH WITH %d PATHS\n" % numpaths)
     if     io.fwrite(&numpaths, sizeof(size_t), 1, f)!=1: raise IOError
     for k in range(numpaths):
       np = self.thisptr[0][k].size()
+      IF DEBUG:   writeDebug("  WRITING PATH %d with %d points\n" % (k, np))
       if   io.fwrite(&np,       sizeof(size_t), 1, f)!=1: raise IOError
       for i in range(np):
         p = &self.thisptr[0][k][i]
         if io.fwrite(&p[0].X,   sizeof(c.cInt), 1, f)!=1: raise IOError
         if io.fwrite(&p[0].Y,   sizeof(c.cInt), 1, f)!=1: raise IOError
+        IF DEBUG: writeDebug("    WRITING POINT %d: %d, %d\n" % (i, p[0].X, p[0].Y))
       
   cdef fromFileObject(self, io.FILE *f):
     """low level read function"""
     cdef size_t numpaths, k, i, np, bytesize
     cdef c.IntPoint * p
+    IF DEBUG:     writeDebug("    READING a clipperpath\n")
     if     io.fread(&numpaths, sizeof(size_t), 1, f)!=1: raise IOError
+    IF DEBUG:     writeDebug("      NUMPATHS: %d\n" % numpaths)
     self.thisptr[0].clear()
     self.thisptr[0].resize(numpaths)
     for k in range(numpaths):
       if   io.fread(&np,       sizeof(size_t), 1, f)!=1: raise IOError
+      IF DEBUG:   writeDebug("      IN PATH %d, numpoints: %d\n" % (k, np))
       self.thisptr[0][k].resize(np)
       for i in range(np):
         p = &self.thisptr[0][k][i]
         if io.fread(&p[0].X,   sizeof(c.cInt), 1, f)!=1: raise IOError
         if io.fread(&p[0].Y,   sizeof(c.cInt), 1, f)!=1: raise IOError
+        IF DEBUG: writeDebug("      POINT %d: %d, %d\n" % (i, p[0].X, p[0].Y))
 
   def toStream(self, stream):
     """write in binary mode. If stream is a string, it is the name of the file to
@@ -366,11 +383,13 @@ def ClipperPathsAndZsToStream(c.cInt npths, object pathsAndZss, object stream):
   cdef c.cInt       numz
   if isfile: f = stream
   else:      f = File(stream, 'wb', True)
+  IF DEBUG:   writeDebug("STARTING WRITING %d clipperpaths (isfile=%d)\n" % (npths, isfile))
   if     io.fwrite(&npths, sizeof(npths),  1, f.f)!=1: raise IOError
   for paths,zs in pathsAndZss:
     if not hasattr(zs, '__len__'):
       zs    = (zs,)
     numz    = len(zs)
+    IF DEBUG: writeDebug("  WRITING %d Zs: %s\n" % (numz, str(zs)))
     if   io.fwrite(&numz,  sizeof(numz),   1, f.f)!=1: raise IOError
     for z in zs:
       if io.fwrite(&z,     sizeof(double), 1, f.f)!=1: raise IOError
@@ -390,18 +409,23 @@ def ClipperPathsAndZsFromStream(object stream, bool alsoYieldNumPaths=False):
   cdef c.cInt       npths, numz
   cdef int          k, m
   cdef ClipperPaths paths
+  IF DEBUG:     writeDebug("STARTING READING\n")
   if isfile: f = stream
   else:      f = File(stream, 'rb', False)
   if     io.fread(&npths, sizeof(npths),  1, f.f)!=1: raise IOError
+  IF DEBUG:     writeDebug("READING NUMCLIPPERPATHS %d\n" % npths)
   if alsoYieldNumPaths: yield npths
   for k in range(npths):
     if   io.fread(&numz,  sizeof(numz),   1, f.f)!=1: raise IOError
+    IF DEBUG:   writeDebug("  READING NUMZ %d\n" % numz)
     zs      = np.empty((numz,))
     for m in range(numz):
       if io.fread(&z,     sizeof(double), 1, f.f)!=1: raise IOError
+      IF DEBUG: writeDebug("  READING Z %f\n" % z)
       zs[m] = z
     paths = ClipperPaths()
     paths.fromFileObject(f.f)
+    IF DEBUG:   writeDebug("  FINISHED READING CLIPPERPATH %d\n" % k)
     yield (paths,zs)
   if not isfile:
     f.close()
