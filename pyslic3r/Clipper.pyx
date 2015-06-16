@@ -234,14 +234,14 @@ cdef class ClipperPaths:
       
   cdef fromFileObject(self, io.FILE *f):
     """low level read function"""
-    cdef size_t numpaths, k, i, np, bytesize
+    cdef size_t oldsize, numpaths, k, i, np, bytesize
     cdef c.IntPoint * p
     IF DEBUG:     writeDebug("    READING a clipperpath\n")
     if     io.fread(&numpaths, sizeof(size_t), 1, f)!=1: raise IOError
     IF DEBUG:     writeDebug("      NUMPATHS: %d\n" % numpaths)
-    self.thisptr[0].clear()
-    self.thisptr[0].resize(numpaths)
-    for k in range(numpaths):
+    oldsize = self.thisptr[0].size()
+    self.thisptr[0].resize(oldsize+numpaths)
+    for k in range(oldsize, oldsize+numpaths):
       if   io.fread(&np,       sizeof(size_t), 1, f)!=1: raise IOError
       IF DEBUG:   writeDebug("      IN PATH %d, numpoints: %d\n" % (k, np))
       self.thisptr[0][k].resize(np)
@@ -254,7 +254,7 @@ cdef class ClipperPaths:
   def toStream(self, stream):
     """write in binary mode. If stream is a string, it is the name of the file to
     write to. If it is None, data will be written to standard output. Otherwise,
-    it must be a file object. The stream is changed to binary mode, if precise"""
+    it must be a file object. The stream is changed to binary mode, if necessary"""
     cdef File f = File(stream, 'wb', True)
     self.toFileObject(f.f)
     f.close()
@@ -262,7 +262,9 @@ cdef class ClipperPaths:
   def fromStream(self, stream):
     """read in binary mode. If stream is a string, it is the name of the file to
     read from. If it is None, data will be read from standard output. Otherwise,
-    it must be a file object. The stream is changed to binary mode, if precise"""
+    it must be a file object. The stream is changed to binary mode, if necessary.
+    New data from the stream is added to existing data (i.e. existing paths are
+    not removed before adding new ones)"""
     cdef File f = File(stream, 'rb', False)
     self.fromFileObject(f.f)
     f.close()
@@ -398,10 +400,11 @@ def ClipperPathsAndZsToStream(c.cInt npths, object pathsAndZss, object stream):
     f.close()
   
 @cython.boundscheck(False)
-def ClipperPathsAndZsFromStream(object stream, bool alsoYieldNumPaths=False):
+def ClipperPathsAndZsFromStream(object stream, bool alsoYieldNumPaths=False, ClipperPaths template=None):
   """for a file or a stream (wrapping a filename, a file-like object or stdin if 
   stream is None), make a generator yielding pairs (ClipperPaths,zs), where zs is a 
-  sequence of doubles. Optionally, the first yielded object is the number of pairs"""
+  sequence of doubles. Optionally, the first yielded object is the number of pairs.
+  If a template is provided, it is used as a basis for all extracted clipperPaths"""
   cdef bool         isfile = isinstance(stream, File)
   cdef File         f
   cdef double       z
@@ -409,6 +412,7 @@ def ClipperPathsAndZsFromStream(object stream, bool alsoYieldNumPaths=False):
   cdef c.cInt       npths, numz
   cdef int          k, m
   cdef ClipperPaths paths
+  cdef bool         useTemplate = template is not None
   IF DEBUG:     writeDebug("STARTING READING\n")
   if isfile: f = stream
   else:      f = File(stream, 'rb', False)
@@ -424,6 +428,8 @@ def ClipperPathsAndZsFromStream(object stream, bool alsoYieldNumPaths=False):
       IF DEBUG: writeDebug("  READING Z %f\n" % z)
       zs[m] = z
     paths = ClipperPaths()
+    if useTemplate:
+      paths.thisptr[0] = template.thisptr[0]
     paths.fromFileObject(f.f)
     IF DEBUG:   writeDebug("  FINISHED READING CLIPPERPATH %d\n" % k)
     yield (paths,zs)
