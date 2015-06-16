@@ -157,6 +157,22 @@ cdef class ClipperPaths:
     else:
       raise IndexError('Invalid slice object')
   
+  @cython.boundscheck(False)
+  def addPath(self, cnp.ndarray[cnp.int64_t, ndim=2] path):
+    cdef cnp.int64_t k
+    cdef size_t n = self.thisptr[0].size()
+    cdef c.Path *cpath
+    if path.shape[1]!=2:
+      raise ValueError("the path must be an array with two columns!") 
+    if path.shape[0]==0:
+      raise ValueError("the path cannot be empty!!!!") 
+    self.thisptr[0].resize(n+1)
+    cpath = &(self.thisptr[0][n])
+    cpath[0].resize(path.shape[0])
+    for k in range(path.shape[0]):
+      cpath[0][k].X = path[k,0]
+      cpath[0][k].Y = path[k,1]
+  
   def clear(self):
     self.thisptr[0].clear()
   
