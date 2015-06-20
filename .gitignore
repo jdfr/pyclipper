@@ -2,6 +2,7 @@
 *.o
 *.a
 *.pyc
+*.pyd
 *.kate-swp
 README.md.html
 test.py
