@@ -213,12 +213,16 @@ def showSlices(data, modeN=False, fig=None, ax=None, title=None, initindex=0, BB
   #     -if it is a number:
   #           *if data is a list, we set it to the bounding box of the corresponding elememnt in data
   #           *if data is a SlicedModel, we set it to its bounding box
+  #     -if data is a list and BB is an empty list, we generate it from all the bounding boxes
   #     -otherwise, we trust that it is a tuple (minx, maxx, miny, maxy), such as the tuple produced by getBoundingBox
   if type(BB)==int:
     if modeN:
       BB = getBoundingBox(data[BB])
     else:
       BB = getBoundingBox(data)
+  elif BB==[] and modeN:
+    Bs = [getBoundingBox(d) for d in data]
+    BB = [fun([B[k] for B in Bs]) for k, fun in enumerate([min, max, min, max])]
   useBB      = BB is not None
 
   #initial common setup
