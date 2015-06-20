@@ -142,6 +142,23 @@ cdef class ClipperPaths:
   def __copy__(self): return self.copy()
 
   @cython.boundscheck(False)
+  def getBoundingBox(self):  
+    """Compute the bounding box."""
+    cdef size_t k1, k2
+    cdef double minx, maxx, miny, maxy, x, y
+    minx = miny =  INFINITY
+    maxx = maxy = -INFINITY
+    for k1 in range(self.thisptr[0].size()):
+      for k2 in range(self.thisptr[0][k1].size()):
+        x = self.thisptr[0][k1][k2].X
+        y = self.thisptr[0][k1][k2].Y
+        minx = min(minx, x)
+        miny = min(miny, y)
+        maxx = max(maxx, x)
+        maxy = max(maxy, y)
+    return (minx, maxx, miny, maxy)
+
+  @cython.boundscheck(False)
   def reverse(self, int index=-1):
     if index<0:
       c.ReversePaths(self.thisptr[0])
