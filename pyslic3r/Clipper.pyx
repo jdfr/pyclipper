@@ -255,9 +255,12 @@ cdef class ClipperPaths:
     """write in binary mode. If stream is a string, it is the name of the file to
     write to. If it is None, data will be written to standard output. Otherwise,
     it must be a file object. The stream is changed to binary mode, if necessary"""
-    cdef File f = File(stream, 'wb', True)
+    cdef noisfile = not isinstance(stream, File)
+    cdef File f
+    if noisfile: f = File(stream, 'wb', True)
+    else:        f = stream
     self.toFileObject(f.f)
-    f.close()
+    if noisfile: f.close()
     
   def fromStream(self, stream):
     """read in binary mode. If stream is a string, it is the name of the file to
@@ -265,9 +268,12 @@ cdef class ClipperPaths:
     it must be a file object. The stream is changed to binary mode, if necessary.
     New data from the stream is added to existing data (i.e. existing paths are
     not removed before adding new ones)"""
-    cdef File f = File(stream, 'rb', False)
+    cdef noisfile = not isinstance(stream, File)
+    cdef File f
+    if noisfile: f = File(stream, 'rb', False)
+    else:        f = stream
     self.fromFileObject(f.f)
-    f.close()
+    if noisfile: f.close()
     
   def   cleanInPlace(self, double distance=1.415):
     c.CleanPolygons(self.thisptr[0], distance)
