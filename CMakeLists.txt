@@ -35,7 +35,7 @@ set(pydir ${CMAKE_CURRENT_SOURCE_DIR}/pyslic3r)
 
 set(inputs clipper slic3rlib)
 
-set(sourcefiles _SlicedModel _TriangleMesh)
+set(sourcefiles SlicedModel TriangleMesh Clipper)
 set(outputs "")
 foreach(f ${sourcefiles})
   list(APPEND outputs ${pydir}/${f}.so)

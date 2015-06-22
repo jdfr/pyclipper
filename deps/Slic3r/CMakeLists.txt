@@ -26,8 +26,8 @@ set(SRC ${CMAKE_CURRENT_SOURCE_DIR}/Slic3r/xs/src)
 #check if the Slic3r source is present, download it otherwise
 if (NOT EXISTS ${SRC})
   #we now execute a git command. cmake has a directive to build external projects (ExternalProject_Add)
-  #that can do this, but it does so at building time, while we need to download the source at cmake time
-  execute_process(COMMAND git clone https://github.com/jdfr/Slic3r.git
+  #that can do this, but it does so at building time, while want to download the source at cmake time
+  execute_process(COMMAND git clone -b pychanges https://github.com/jdfr/Slic3r.git
                   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
                   RESULT_VARIABLE gitresult)
   if (NOT (gitresult EQUAL 0))
@@ -54,7 +54,6 @@ ADD_DEFINITIONS(-D_GLIBCXX_USE_C99 -DNOGDI)
 #BUT BE AWARE THAT THEY WILL IMPLY RECOMPILATION OF ALL FILES
 option(DODEBUG           "compile with debug  messages" OFF)
 option(DOTIMING          "compile with timing messages" OFF)
-option(DONOTUSEPOLY2TRI  "disable functions that require the use of poly2tri" ON)
 option(FULLLIBRARY       "include all sources in the library" OFF)
 
 set(MASK "/*.c*") #*.c, *.cc, *.cpp
@@ -74,11 +73,8 @@ else()
   endforeach()
 endif()
 
-set(slic3r_sources ${admesh_c} ${slic3r1_c} ${slic3r2_c})
+set(slic3r_sources ${admesh_c} ${slic3r1_c} ${slic3r2_c} ${poly2tri_c})
 
-if (FULLLIBRARY OR NOT DONOTUSEPOLY2TRI)
-  set(slic3r_sources ${slic3r_sources} ${poly2tri_c})
-endif()
 set(SOURCES ${slic3r_sources} )
 
 set(CONFIGH externalincludes) #add silly config.h dependency in one of Slic3r's subprojects
@@ -90,9 +86,6 @@ if (DODEBUG)
 endif()
 if (DOTIMING)
   set_source_files_properties (${SRC}/libslic3r/TriangleMesh.cpp ${SRC}/admesh/normals.c ${SRC}/admesh/stlinit.c COMPILE_FLAGS -DPRINT_TIMING)
-endif()
-if (DONOTUSEPOLY2TRI)
-  ADD_DEFINITIONS(-DNOPOLYT2RI)
 endif()
 
 #foreach(file ${slic3r1_c})

@@ -760,7 +760,7 @@ cdef vector[vector[Polygons]] * triangulateAllLayers(SlicedModel model) nogil:
     nexpols = model.thisptr[0][k1].size()
     polss[0][k1].resize(nexpols)
     for k2 in range(nexpols):
-      model.thisptr[0][k1][k2].triangulate_pp(&polss[0][k1][k2])
+      model.thisptr[0][k1][k2].triangulate_p2t(&polss[0][k1][k2])
   return polss
 
 #######################################################################
