@@ -26,8 +26,8 @@ set(SRC ${CMAKE_CURRENT_SOURCE_DIR}/Slic3r/xs/src)
 #check if the Slic3r source is present, download it otherwise
 if (NOT EXISTS ${SRC})
   #we now execute a git command. cmake has a directive to build external projects (ExternalProject_Add)
-  #that can do this, but it does so at building time, while we need to download the source at cmake time
-  execute_process(COMMAND git clone https://github.com/jdfr/Slic3r.git
+  #that can do this, but it does so at building time, while want to download the source at cmake time
+  execute_process(COMMAND git clone -b pychanges https://github.com/jdfr/Slic3r.git
                   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
                   RESULT_VARIABLE gitresult)
   if (NOT (gitresult EQUAL 0))
