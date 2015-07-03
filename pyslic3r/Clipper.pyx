@@ -334,6 +334,7 @@ cdef class ClipperPaths:
     p.Y = y
     return c.PointInPolygon(p, self.thisptr[0][npath])
 
+cdef PY3 = sys.version_info >= (3,0)
     
 cdef class File:
   """Custom and (hopefully) fast lightweight wrapper for files.
@@ -346,6 +347,7 @@ cdef class File:
     self.iswrite   = write
     if   isinstance(stream, basestring):
       self.doclose = True
+      #CANNOT PORT DIRECTLY TO PYTHON 3: THIS STATEMET PRODUCES A SEGFAULT OR SOMETHING LIKE THAT IN WINPYTHON 3.4, BUT WORKS ON WINPYTHON 2.7.9
       self.f       = io.fopen(stream, mode)
     elif stream is None:
       self.doclose = False
@@ -353,6 +355,8 @@ cdef class File:
         stream     = sys.stdout #f = io.stdout
       else:
         stream     = sys.stdin  #f = io.stdin
+      if PY3:
+        stream = stream.buffer #python 3 ready
       fileno       = stream.fileno()
       if Windows:
         msvcrt.setmode(fileno, os.O_BINARY)
