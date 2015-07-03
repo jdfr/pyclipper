@@ -76,6 +76,16 @@ etOpenButt          = c.etOpenButt
 etOpenSquare        = c.etOpenSquare
 etOpenRound         = c.etOpenRound
 
+DEF DEBUG = False
+DEBUGMODE = DEBUG #expose the compile-time directive to python
+DEBUGPATH = "debug.Clipper.pyx.log" #this can be overriden by callers
+
+cpdef writeDebug(msg):
+  """Quick and dirty internal logging facility"""
+  #originally for debugging the IO workflow when executing the process without a console
+  with open(DEBUGPATH, 'a') as f:
+    f.write(msg)
+
 cdef class ClipperPathsIterator:
   cdef ClipperPaths paths
   cdef size_t current
@@ -147,6 +157,22 @@ cdef class ClipperPaths:
     else:
       raise IndexError('Invalid slice object')
   
+  @cython.boundscheck(False)
+  def addPath(self, cnp.ndarray[cnp.int64_t, ndim=2] path):
+    cdef cnp.int64_t k
+    cdef size_t n = self.thisptr[0].size()
+    cdef c.Path *cpath
+    if path.shape[1]!=2:
+      raise ValueError("the path must be an array with two columns!") 
+    if path.shape[0]==0:
+      raise ValueError("the path cannot be empty!!!!") 
+    self.thisptr[0].resize(n+1)
+    cpath = &(self.thisptr[0][n])
+    cpath[0].resize(path.shape[0])
+    for k in range(path.shape[0]):
+      cpath[0][k].X = path[k,0]
+      cpath[0][k].Y = path[k,1]
+  
   def clear(self):
     self.thisptr[0].clear()
   
@@ -208,54 +234,62 @@ cdef class ClipperPaths:
   cdef toFileObject(self, io.FILE *f):
     """low level write function"""
     cdef size_t numpaths = self.thisptr[0].size()
-    cdef size_t k, i, np, bytesize, count
+    cdef size_t k, i, np, bytesize
     cdef c.IntPoint * p
-    count = io.fwrite(&numpaths, sizeof(size_t), 1, f)
-    if count!=1: raise IOError
+    IF DEBUG:     writeDebug("  WRITING A CLIPPERPATH WITH %d PATHS\n" % numpaths)
+    if     io.fwrite(&numpaths, sizeof(size_t), 1, f)!=1: raise IOError
     for k in range(numpaths):
       np = self.thisptr[0][k].size()
-      count = io.fwrite(&np, sizeof(size_t), 1, f)
+      IF DEBUG:   writeDebug("  WRITING PATH %d with %d points\n" % (k, np))
+      if   io.fwrite(&np,       sizeof(size_t), 1, f)!=1: raise IOError
       for i in range(np):
         p = &self.thisptr[0][k][i]
-        count = io.fwrite(&p[0].X, sizeof(c.cInt), 1, f)
-        if count!=1: raise IOError
-        count = io.fwrite(&p[0].Y, sizeof(c.cInt), 1, f)
-        if count!=1: raise IOError
+        if io.fwrite(&p[0].X,   sizeof(c.cInt), 1, f)!=1: raise IOError
+        if io.fwrite(&p[0].Y,   sizeof(c.cInt), 1, f)!=1: raise IOError
+        IF DEBUG: writeDebug("    WRITING POINT %d: %d, %d\n" % (i, p[0].X, p[0].Y))
       
   cdef fromFileObject(self, io.FILE *f):
     """low level read function"""
-    cdef size_t count, numpaths, k, i, np, bytesize
+    cdef size_t oldsize, numpaths, k, i, np, bytesize
     cdef c.IntPoint * p
-    count = io.fread(&numpaths, sizeof(size_t), 1, f)
-    if count!=1: raise IOError
-    self.thisptr[0].clear()
-    self.thisptr[0].resize(numpaths)
-    for k in range(numpaths):
-      count = io.fread(&np, sizeof(size_t), 1, f)
-      if count!=1: raise IOError
+    IF DEBUG:     writeDebug("    READING a clipperpath\n")
+    if     io.fread(&numpaths, sizeof(size_t), 1, f)!=1: raise IOError
+    IF DEBUG:     writeDebug("      NUMPATHS: %d\n" % numpaths)
+    oldsize = self.thisptr[0].size()
+    self.thisptr[0].resize(oldsize+numpaths)
+    for k in range(oldsize, oldsize+numpaths):
+      if   io.fread(&np,       sizeof(size_t), 1, f)!=1: raise IOError
+      IF DEBUG:   writeDebug("      IN PATH %d, numpoints: %d\n" % (k, np))
       self.thisptr[0][k].resize(np)
       for i in range(np):
         p = &self.thisptr[0][k][i]
-        count = io.fread(&p[0].X, sizeof(c.cInt), 1, f)
-        if count!=1: raise IOError
-        count = io.fread(&p[0].Y, sizeof(c.cInt), 1, f)
-        if count!=1: raise IOError
+        if io.fread(&p[0].X,   sizeof(c.cInt), 1, f)!=1: raise IOError
+        if io.fread(&p[0].Y,   sizeof(c.cInt), 1, f)!=1: raise IOError
+        IF DEBUG: writeDebug("      POINT %d: %d, %d\n" % (i, p[0].X, p[0].Y))
 
   def toStream(self, stream):
     """write in binary mode. If stream is a string, it is the name of the file to
     write to. If it is None, data will be written to standard output. Otherwise,
-    it must be a file object. The stream is changed to binary mode, if precise"""
-    cdef File f = File(stream, 'wb', True)
+    it must be a file object. The stream is changed to binary mode, if necessary"""
+    cdef noisfile = not isinstance(stream, File)
+    cdef File f
+    if noisfile: f = File(stream, 'wb', True)
+    else:        f = stream
     self.toFileObject(f.f)
-    f.close()
+    if noisfile: f.close()
     
   def fromStream(self, stream):
     """read in binary mode. If stream is a string, it is the name of the file to
     read from. If it is None, data will be read from standard output. Otherwise,
-    it must be a file object. The stream is changed to binary mode, if precise"""
-    cdef File f = File(stream, 'rb', False)
+    it must be a file object. The stream is changed to binary mode, if necessary.
+    New data from the stream is added to existing data (i.e. existing paths are
+    not removed before adding new ones)"""
+    cdef noisfile = not isinstance(stream, File)
+    cdef File f
+    if noisfile: f = File(stream, 'rb', False)
+    else:        f = stream
     self.fromFileObject(f.f)
-    f.close()
+    if noisfile: f.close()
     
   def   cleanInPlace(self, double distance=1.415):
     c.CleanPolygons(self.thisptr[0], distance)
@@ -300,74 +334,133 @@ cdef class ClipperPaths:
     p.Y = y
     return c.PointInPolygon(p, self.thisptr[0][npath])
 
+cdef PY3 = sys.version_info >= (3,0)
     
 cdef class File:
   """Custom and (hopefully) fast lightweight wrapper for files.
-  It works with strings representing file names, or file-like
-  objects, or (if None is provided) redirecting to/from
-  stdin/stdout,always in binary mode"""
+  It works with strings representing file names, or stdin/stdout
+  if None is provided (forcing them to binary mode)"""
   
-  def __cinit__(self, object stream, str mode, bool write):
+  def __cinit__(self, object stream, str mode="wb", bool write=True):
     """open a FILE* object"""
-    self.doclose   = False
-    self.write     = write
-    self.closed    = False
+    cdef fileno
+    self.iswrite   = write
     if   isinstance(stream, basestring):
-      self.f       = io.fopen(stream, mode)
       self.doclose = True
-    else:
-      if stream is None:
-        if write:
-          stream   = sys.stdout #f = io.stdout
-        else:
-          stream   = sys.stdin  #f = io.stdin
+      #CANNOT PORT DIRECTLY TO PYTHON 3: THIS STATEMET PRODUCES A SEGFAULT OR SOMETHING LIKE THAT IN WINPYTHON 3.4, BUT WORKS ON WINPYTHON 2.7.9
+      self.f       = io.fopen(stream, mode)
+    elif stream is None:
+      self.doclose = False
+      if write:
+        stream     = sys.stdout #f = io.stdout
+      else:
+        stream     = sys.stdin  #f = io.stdin
+      if PY3:
+        stream = stream.buffer #python 3 ready
+      fileno       = stream.fileno()
       if Windows:
-        msvcrt.setmode(stream.fileno(), os.O_BINARY)
-      self.f       = PyFile_AsFile(stream)
+        msvcrt.setmode(fileno, os.O_BINARY)
+      self.f       = io.fdopen(fileno, mode)
+    else:
+      raise IOError("This class can only open new files or reopen stdin/stdout")
   
-  cdef void close(self):
+  cpdef close(self):
     """close the file just once, if it has to be done"""
-    if self.doclose and self.closed:
+    if self.doclose:
       io.fclose(self.f)
-      self.closed = True
+      self.doclose = False
+  
+  cpdef flush(self):
+    """flush the buffers"""
+    io.fflush(self.f)
+  
+  #it is redundant to expose these methods, but we need them upstream
+  def readDouble(self):
+    cdef double v
+    if io.fread(&v, sizeof(v),  1, self.f)!=1: raise IOError
+    return v  
+  
+  def readInt64(self):
+    cdef cnp.int64_t v
+    if io.fread(&v, sizeof(v),  1, self.f)!=1: raise IOError
+    return v
+
+  def write(self, object v):
+    cdef cnp.int64_t v1
+    cdef double      v2
+    if   isinstance(v, int):
+      v1 = v
+      if io.fwrite(&v1, sizeof(v1), 1, self.f)!=1: raise IOError
+    elif isinstance(v, float):
+      v2 = v
+      if io.fwrite(&v2, sizeof(v2), 1, self.f)!=1: raise IOError
+    else:
+      raise IOError
   
   def __dealloc__(self):
     """make sure it is closed"""
     self.close()
-    
-    
-def ClipperPathsAndZsToStream(c.cInt numpaths, object pathsAndZss, object stream):
-  """from a sequence of pairs (ClipperPaths,z), write to a file or file-like object"""
-  cdef File        f = File(stream, 'wb', True)
-  cdef double      z
-  cdef ClipperPaths paths
-  count = io.fwrite(&numpaths, sizeof(numpaths), 1, f.f)
-  if count!=1: raise IOError
-  for paths,z in pathsAndZss:
-    count = io.fwrite(&z, sizeof(double), 1, f.f)
-    if count!=1: raise IOError
-    paths.toFileObject(f.f)
-  f.close()
-  
-def ClipperPathsAndZsFromStream(object stream, bool alsoYieldNumPaths=False):
-  """for a file or a stream (wrapping a file or file-like object),
-  make a generator yielding pairs (ClipperPaths,z). Optionally, the first yielded
-  object is the number of pairs"""
-  cdef File         f = File(stream, 'rb', False)
+
+def ClipperPathsAndZsToStream(c.cInt npths, object pathsAndZss, object stream):
+  """from a sequence of pairs (ClipperPaths,zs), where zs is itself a sequence of double values,
+  write to a filename, a file object or stdout (if stream is None)"""
+  cdef bool         isfile = isinstance(stream, File)
+  cdef File         f
   cdef double       z
-  cdef c.cInt       numpaths
-  cdef int          k
   cdef ClipperPaths paths
-  count = io.fread(&numpaths, sizeof(numpaths), 1, f.f)
-  if count!=1: raise IOError
-  if alsoYieldNumPaths: yield numpaths
-  for k in range(numpaths):
-    count = io.fread(&z, sizeof(double), 1, f.f)
-    if count!=1: raise IOError
+  cdef c.cInt       numz
+  if isfile: f = stream
+  else:      f = File(stream, 'wb', True)
+  IF DEBUG:   writeDebug("STARTING WRITING %d clipperpaths (isfile=%d)\n" % (npths, isfile))
+  if     io.fwrite(&npths, sizeof(npths),  1, f.f)!=1: raise IOError
+  for paths,zs in pathsAndZss:
+    if not hasattr(zs, '__len__'):
+      zs    = (zs,)
+    numz    = len(zs)
+    IF DEBUG: writeDebug("  WRITING %d Zs: %s\n" % (numz, str(zs)))
+    if   io.fwrite(&numz,  sizeof(numz),   1, f.f)!=1: raise IOError
+    for z in zs:
+      if io.fwrite(&z,     sizeof(double), 1, f.f)!=1: raise IOError
+    paths.toFileObject(f.f)
+  if not isfile:
+    f.close()
+  
+@cython.boundscheck(False)
+def ClipperPathsAndZsFromStream(object stream, bool alsoYieldNumPaths=False, ClipperPaths template=None):
+  """for a file or a stream (wrapping a filename, a file-like object or stdin if 
+  stream is None), make a generator yielding pairs (ClipperPaths,zs), where zs is a 
+  sequence of doubles. Optionally, the first yielded object is the number of pairs.
+  If a template is provided, it is used as a basis for all extracted clipperPaths"""
+  cdef bool         isfile = isinstance(stream, File)
+  cdef File         f
+  cdef double       z
+  cdef cnp.ndarray  zs
+  cdef c.cInt       npths, numz
+  cdef int          k, m
+  cdef ClipperPaths paths
+  cdef bool         useTemplate = template is not None
+  IF DEBUG:     writeDebug("STARTING READING\n")
+  if isfile: f = stream
+  else:      f = File(stream, 'rb', False)
+  if     io.fread(&npths, sizeof(npths),  1, f.f)!=1: raise IOError
+  IF DEBUG:     writeDebug("READING NUMCLIPPERPATHS %d\n" % npths)
+  if alsoYieldNumPaths: yield npths
+  for k in range(npths):
+    if   io.fread(&numz,  sizeof(numz),   1, f.f)!=1: raise IOError
+    IF DEBUG:   writeDebug("  READING NUMZ %d\n" % numz)
+    zs      = np.empty((numz,))
+    for m in range(numz):
+      if io.fread(&z,     sizeof(double), 1, f.f)!=1: raise IOError
+      IF DEBUG: writeDebug("  READING Z %f\n" % z)
+      zs[m] = z
     paths = ClipperPaths()
+    if useTemplate:
+      paths.thisptr[0] = template.thisptr[0]
     paths.fromFileObject(f.f)
-    yield (paths,z)
-  f.close()
+    IF DEBUG:   writeDebug("  FINISHED READING CLIPPERPATH %d\n" % k)
+    yield (paths,zs)
+  if not isfile:
+    f.close()
   
     
 cdef class ClipperPolyTree:

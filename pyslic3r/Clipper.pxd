@@ -51,7 +51,7 @@ cdef class ClipperOffset:
 cdef class File:
   cdef io.FILE* f
   cdef bool     doclose
-  cdef bool     closed
-  cdef bool     write
+  cdef bool     iswrite
   
-  cdef void close(self)
+  cpdef close(self)
+  cpdef flush(self)
