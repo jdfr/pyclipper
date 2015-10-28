@@ -31,15 +31,6 @@ Please note that the project will probably compile with other versions of the de
 After the dependencies have been installed, you can proceed to compilation. To compile the cython bindings, do the following:
 
 ```bash
-mkdir cmakebuild
-cd cmakebuild
-cmake ..
-make
-```
-
-alternatively:
-
-```bash
 python setup.py build_ext --inplace
 ```
 
