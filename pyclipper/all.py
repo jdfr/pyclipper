@@ -13,14 +13,5 @@
 # License along with this file. You may obtain a copy of the License at
 # http://www.gnu.org/licenses/agpl-3.0.txt
 
-
-import cleanutils
-#import shutil
-
-#remove root cmakebuild
-cleanutils.erasedircontents('cmakebuild')
-
-#remove Slic3r's cmakebuild and source
-cleanutils.erasedircontents('deps/Slic3r/cmakebuild')
-#do not remove Slic3r's source
-#shutil.rmtree         ('deps/Slic3r/Slic3r')
+from pyslic3r.plot    import *
+from pyslic3r.Clipper import *
