@@ -23,14 +23,44 @@ import matplotlib.pyplot      as plt
 from   matplotlib.path    import Path
 from   matplotlib.patches import PathPatch
 from   matplotlib.lines   import Line2D
+import matplotlib.collections as pc
 
-defaultPatchArgs  =   {'facecolor':'#cccccc', 'edgecolor':'#999999', 'lw':1}
-defaultPatchArgss = [ {'facecolor':'#ff0000', 'edgecolor':'#000000', 'lw':1.5},
-                      {'facecolor':'#0000ff', 'edgecolor':'#000000', 'lw':1},
-                      {'facecolor':'#00ff00', 'edgecolor':'#000000', 'lw':0.75},
-                      {'facecolor':'#00ffff', 'edgecolor':'#000000', 'lw':0.75},
-                      {'facecolor':'#ffff00', 'edgecolor':'#000000', 'lw':0.75},
-                      {'facecolor':'#ff00ff', 'edgecolor':'#000000', 'lw':0.75} ]
+def scaleObject(obj, scalingFactor=0.000001):
+  if isinstance(obj, n.ndarray):
+    return obj*scalingFactor
+  elif isinstance(obj, (c.ClipperPaths, list, tuple)):
+    return [scaleObject(x, scalingFactor) for x in obj]
+  else:
+    raise Exception('Cannot recognize this object type: '+str(type(obj)))
+
+def showOpenClipperPaths(paths, fig=None, ax=None, show=True, **kwargs):
+  if fig is None: fig = plt.figure(frameon=False)
+  if ax  is None: ax  = fig.add_subplot(111, aspect='equal')
+  lines = scaleObject(paths)
+  lc = pc.LineCollection(lines, **kwargs)
+  ax.add_collection(lc)
+  ax.autoscale()
+  if show:
+    plt.show()
+
+colorlist = ['#cccccc', #gray
+             '#ff0000', #red
+             '#0000ff', #blue
+             '#00ff00', #green
+             '#00ffff', #cyan
+             '#ffff00', #yellow
+             '#ff00ff', #magenta
+              ]
+
+defaultPatchArgs  =   {'facecolor':colorlist[0], 'edgecolor':'#999999', 'lw':1}
+defaultPatchArgss = [
+                      {'facecolor':colorlist[1], 'edgecolor':'#000000', 'lw':1.5},
+                      {'facecolor':colorlist[2], 'edgecolor':'#000000', 'lw':1},
+                      {'facecolor':colorlist[3], 'edgecolor':'#000000', 'lw':0.75},
+                      {'facecolor':colorlist[4], 'edgecolor':'#000000', 'lw':0.75},
+                      {'facecolor':colorlist[5], 'edgecolor':'#000000', 'lw':0.75},
+                      {'facecolor':colorlist[6], 'edgecolor':'#000000', 'lw':0.75},
+                      ]
 
 def object2DToPatches(obj, sliceindex=None, linestyle=None, patchArgs=defaultPatchArgs):
   """Universial conversion of objects to iterators of patches. It works for:
