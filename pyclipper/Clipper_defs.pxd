@@ -40,6 +40,11 @@ cdef extern from "clipper.hpp" namespace "ClipperLib" nogil:
   
   ctypedef signed long long cInt
   
+  cdef struct DoublePoint:
+    double X
+    double Y
+    DoublePoint(double, double)
+  
   cdef struct IntPoint:
     cInt X
     cInt Y

@@ -86,6 +86,181 @@ cpdef writeDebug(msg):
   with open(DEBUGPATH, 'a') as f:
     f.write(msg)
 
+cdef class ClipperDPathsIterator:
+  cdef ClipperDPaths paths
+  cdef size_t current
+  
+  def __cinit__(self, ClipperDPaths p):
+    self.paths   = p
+    self.current = 0
+    
+  @cython.boundscheck(False)
+  def __next__(self):
+    if self.current >= self.paths.thisptr[0].size():
+      raise StopIteration
+    else:
+      x = DPath2arrayView(self.paths, &self.paths.thisptr[0][self.current])
+      self.current += 1
+      return x
+
+@cython.boundscheck(False)
+def arrayListToClipperDPaths(list paths, ClipperDPaths output=None):
+  """Convert a list of two-dimensional arrays of type int64 to a ClipperPaths 
+  object (this list can be got with list(x for x in paths)"""
+  cdef DPath *path
+  cdef size_t k, p, npaths, npoints
+  cdef cnp.ndarray[cnp.double_t, ndim=1] array
+  if output is None:
+    output = ClipperDPaths()
+  npaths = len(paths)
+  output.thisptr[0].resize(npaths)
+  for k in range(npaths):
+    array   = paths[k]
+    npoints = array.shape[0]
+    path    = &output.thisptr[0][k]
+    path[0].resize(npoints)
+    for p in range(npoints):
+      path[0][p].X = array[p,0]
+      path[0][p].Y = array[p,1]
+
+cdef class ClipperDPaths:
+  """Thin wrapper around Clipper::Paths. It is intended just as a temporary object
+  to do Clipper operations on the data, the end results to be incorporated back
+  into another kind of object"""
+
+  def __cinit__(self):       self.thisptr = new DPaths()
+  def __dealloc__(self): del self.thisptr
+
+  def __reduce__(self):
+    d = {'state': list(self.__iter__())}
+    return (ClipperDPaths, (), d)
+  def __setstate__(self, d):
+    arrayListToClipperDPaths(d['state'], self)
+    
+  def __len__(self):
+    return self.thisptr[0].size()
+  def __iter__(self):
+    return ClipperDPathsIterator(self)
+  
+  def __getitem__(self, val):
+    """Basic indexing support"""
+    cdef int npath
+    if   isinstance(val, int):
+      npath = val
+      if (npath<0) or (<size_t>npath>=self.thisptr[0].size()):
+        raise Exception('Invalid index')
+      return DPath2arrayView(self, &self.thisptr[0][npath])
+    elif isinstance(val, slice) or isinstance(val, tuple):
+      raise Exception('This object does not support slicing, only indexing')
+    else:
+      raise IndexError('Invalid slice object')
+  
+  @cython.boundscheck(False)
+  def addPath(self, cnp.ndarray[cnp.double_t, ndim=2] path):
+    cdef cnp.int64_t k
+    cdef size_t n = self.thisptr[0].size()
+    cdef DPath *cpath
+    if path.shape[1]!=2:
+      raise ValueError("the path must be an array with two columns!") 
+    if path.shape[0]==0:
+      raise ValueError("the path cannot be empty!!!!") 
+    self.thisptr[0].resize(n+1)
+    cpath = &(self.thisptr[0][n])
+    cpath[0].resize(path.shape[0])
+    for k in range(path.shape[0]):
+      cpath[0][k].X = path[k,0]
+      cpath[0][k].Y = path[k,1]
+  
+  def clear(self):
+    self.thisptr[0].clear()
+  
+  def copyFrom(self, ClipperDPaths other):
+    self.thisptr[0] = other.thisptr[0]
+    
+  def copy(self):
+    cdef ClipperDPaths out = ClipperDPaths()
+    out.thisptr[0] = self.thisptr[0]
+    return out
+
+  def __copy__(self): return self.copy()
+
+  @cython.boundscheck(False)
+  def getBoundingBox(self):  
+    """Compute the bounding box."""
+    cdef size_t k1, k2
+    cdef double minx, maxx, miny, maxy, x, y
+    minx = miny =  INFINITY
+    maxx = maxy = -INFINITY
+    for k1 in range(self.thisptr[0].size()):
+      for k2 in range(self.thisptr[0][k1].size()):
+        x = self.thisptr[0][k1][k2].X
+        y = self.thisptr[0][k1][k2].Y
+        minx = min(minx, x)
+        miny = min(miny, y)
+        maxx = max(maxx, x)
+        maxy = max(maxy, y)
+    return (minx, maxx, miny, maxy)
+
+  cdef toFileObject(self, io.FILE *f):
+    """low level write function"""
+    cdef size_t numpaths = self.thisptr[0].size()
+    cdef size_t k, i, np
+    cdef c.DoublePoint * p
+    IF DEBUG:     writeDebug("  WRITING A CLIPPERPATH WITH %d PATHS\n" % numpaths)
+    if     io.fwrite(&numpaths, sizeof(size_t), 1, f)!=1: raise IOError
+    for k in range(numpaths):
+      np = self.thisptr[0][k].size()
+      IF DEBUG:   writeDebug("  WRITING PATH %d with %d points\n" % (k, np))
+      if   io.fwrite(&np,       sizeof(size_t), 1, f)!=1: raise IOError
+      for i in range(np):
+        p = &self.thisptr[0][k][i]
+        if io.fwrite(&p[0].X,   sizeof(double), 1, f)!=1: raise IOError
+        if io.fwrite(&p[0].Y,   sizeof(double), 1, f)!=1: raise IOError
+        IF DEBUG: writeDebug("    WRITING POINT %d: %f, %f\n" % (i, p[0].X, p[0].Y))
+      
+  cdef fromFileObject(self, io.FILE *f):
+    """low level read function"""
+    cdef size_t oldsize, numpaths, k, i, np
+    cdef c.DoublePoint * p
+    IF DEBUG:     writeDebug("    READING a clipperpath\n")
+    if     io.fread(&numpaths, sizeof(size_t), 1, f)!=1: raise IOError
+    IF DEBUG:     writeDebug("      NUMPATHS: %d\n" % numpaths)
+    oldsize = self.thisptr[0].size()
+    self.thisptr[0].resize(oldsize+numpaths)
+    for k in range(oldsize, oldsize+numpaths):
+      if   io.fread(&np,       sizeof(size_t), 1, f)!=1: raise IOError
+      IF DEBUG:   writeDebug("      IN PATH %d, numpoints: %d\n" % (k, np))
+      self.thisptr[0][k].resize(np)
+      for i in range(np):
+        p = &self.thisptr[0][k][i]
+        if io.fread(&p[0].X,   sizeof(double), 1, f)!=1: raise IOError
+        if io.fread(&p[0].Y,   sizeof(double), 1, f)!=1: raise IOError
+        IF DEBUG: writeDebug("      POINT %d: %f, %f\n" % (i, p[0].X, p[0].Y))
+
+  def toStream(self, stream):
+    """write in binary mode. If stream is a string, it is the name of the file to
+    write to. If it is None, data will be written to standard output. Otherwise,
+    it must be a file object. The stream is changed to binary mode, if necessary"""
+    cdef noisfile = not isinstance(stream, File)
+    cdef File f
+    if noisfile: f = File(stream, 'wb', True)
+    else:        f = stream
+    self.toFileObject(f.f)
+    if noisfile: f.close()
+    
+  def fromStream(self, stream):
+    """read in binary mode. If stream is a string, it is the name of the file to
+    read from. If it is None, data will be read from standard output. Otherwise,
+    it must be a file object. The stream is changed to binary mode, if necessary.
+    New data from the stream is added to existing data (i.e. existing paths are
+    not removed before adding new ones)"""
+    cdef noisfile = not isinstance(stream, File)
+    cdef File f
+    if noisfile: f = File(stream, 'rb', False)
+    else:        f = stream
+    self.fromFileObject(f.f)
+    if noisfile: f.close()
+    
 cdef class ClipperPathsIterator:
   cdef ClipperPaths paths
   cdef size_t current
@@ -639,6 +814,9 @@ cdef class ClipperOffset:
 cdef cnp.npy_intp *pointstrides = [sizeof(c.IntPoint),
                                    <cnp.uint8_t*>&(<c.IntPoint*>NULL).Y - 
                                    <cnp.uint8_t*>&(<c.IntPoint*>NULL).X]
+cdef cnp.npy_intp *dpointstrides = [sizeof(c.DoublePoint),
+                                   <cnp.uint8_t*>&(<c.DoublePoint*>NULL).Y - 
+                                   <cnp.uint8_t*>&(<c.DoublePoint*>NULL).X]
 
 cdef cnp.ndarray Path2arrayView(ClipperPaths parent, c.Path *path):
   """Similar to Polygon2arrayI, but instead of allocating a full-blown array,
@@ -646,6 +824,19 @@ cdef cnp.ndarray Path2arrayView(ClipperPaths parent, c.Path *path):
   cdef void         *data  = &(path[0][0].X)
   cdef cnp.npy_intp *dims  = [path[0].size(),2]
   cdef cnp.ndarray  result = cnp.PyArray_New(np.ndarray, 2, dims, cnp.NPY_INT64, pointstrides,
+                                             data, -1, NPY_ARRAY_CARRAY, <object>NULL)
+  ##result.base is of type PyObject*, so no reference counting with this assignment
+  result.base              = <ref.PyObject*>parent
+  ref.Py_INCREF(parent) #so, make sure that "result" owns a reference to "parent"
+  #ref.Py_INCREF(result)
+  return result
+
+cdef cnp.ndarray DPath2arrayView(ClipperDPaths parent, DPath *path):
+  """Similar to Polygon2arrayI, but instead of allocating a full-blown array,
+  the returned array is a view into the underlying data"""
+  cdef void         *data  = &(path[0][0].X)
+  cdef cnp.npy_intp *dims  = [path[0].size(),2]
+  cdef cnp.ndarray  result = cnp.PyArray_New(np.ndarray, 2, dims, cnp.NPY_DOUBLE, pointstrides,
                                              data, -1, NPY_ARRAY_CARRAY, <object>NULL)
   ##result.base is of type PyObject*, so no reference counting with this assignment
   result.base              = <ref.PyObject*>parent

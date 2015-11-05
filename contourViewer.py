@@ -4,7 +4,7 @@ import itertools as it
 import sys
 import time
 
-debugfile = "c:\\users\\jd\dev\\separator\\cosa.log"
+debugfile = "cosa.log"
 
 if __name__ == "__main__":
   if len(sys.argv)<3:
@@ -29,7 +29,7 @@ if __name__ == "__main__":
   for i in xrange(len(files)):
     paths[i] = c.ClipperPaths()
     paths[i].fromStream(files[i])
-  
+  windowname+=" "+str(p2.getBoundingBox(paths))
   #linestyles = [{'linestyle':'-', 'marker':'None', 'linewidth': 2.0, 'color':p2.colorlist[i]} for i in xrange(len(files))]
   # linestyles = [{'linestyle':'None', 'marker':'o', 'markersize':5.0, 'markerfacecolor':'m'} for _ in xrange(len(files))]
   linestyles = [None]*len(files)
@@ -55,6 +55,7 @@ if __name__ == "__main__":
     # linestyles[i] = {'linestyle':'-', 'marker':'None', 'linewidth': 2.0, 'color':p2.colorlist[i]}
     linestyles[i] = {'facecolors': 'None', 'edgecolors': p2.colorlist[i], 'linewidths': 2.0}
     
-  p2.showSlices(paths, modeN=True, title=windowname, linestyle=linestyles, patchArgs=defaultPatchArgs)#,BB=bb, fig=makeMaximizedFig())
+  p2.showOpenClipperPaths(paths, title=windowname)
+  #p2.showSlices(paths, modeN=True, title=windowname, linestyle=linestyles, patchArgs=defaultPatchArgs)#,BB=bb, fig=makeMaximizedFig())
   
     
