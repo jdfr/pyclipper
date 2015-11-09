@@ -339,7 +339,7 @@ def showSlices(data, modeN=False, fig=None, ax=None, title=None, initindex=0, BB
   #setup for list of SlicedModels
   if modeN:
     if patchArgs is None: patchArgs = defaultPatchArgss
-    leng    = lambda x: len(x[1])
+    leng    = max([len(x) for x in data if not x is None])
     showfun = show2DObjectN
     args    = lambda: dict(usePatchess=usePatches, linestyles=linestyle, patchArgss=patchArgs, sliceindexes=index)
     def remove(allpatches):
@@ -350,7 +350,7 @@ def showSlices(data, modeN=False, fig=None, ax=None, title=None, initindex=0, BB
   #setup fot single SlicedModel
   else:
     if patchArgs is None: patchArgs = defaultPatchArgs
-    leng    = lambda x: len(x)
+    leng    = len(data)
     showfun = show2DObject
     args    = lambda: dict(usePatches=usePatches, linestyle=linestyle,  patchArgs=patchArgs,  sliceindex=index[0])
     def remove(patches):
@@ -359,11 +359,11 @@ def showSlices(data, modeN=False, fig=None, ax=None, title=None, initindex=0, BB
 
   #final setup    
   #index = [initindex]
-  index     = [min(max(0, initindex), leng(data)-1)] #this is a list as a workaround to set the value   index[0] in nested scopes
+  index     = [min(max(0, initindex), leng-1)] #this is a list as a workaround to set the value   index[0] in nested scopes
 
   #function to draw the figure      
   def paint():
-    message = 'Layer %d/%d' % (index[0], leng(data)-1)
+    message = 'Layer %d/%d' % (index[0], leng-1)
     if zs is not None:
       message += ": %f" % zs[index[0]]
     #save the toolbar's view stack, which is reset when clearing axes or adding/removing objects
@@ -396,7 +396,7 @@ def showSlices(data, modeN=False, fig=None, ax=None, title=None, initindex=0, BB
   #function to receive keypress events to draw the figure      
   def onpress(event):
     key = str(event.key)
-    l   = leng(data)-1
+    l   = leng-1
     if   key == 'down'  and index[0]>0:
       index[0] -= 1
       paint()
