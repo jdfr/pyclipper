@@ -27,6 +27,8 @@
 #copper       greens        prgn     reds
 #dark2        greys         prism    set1
 
+from . import Clipper as c
+
 import itertools as it
 
 import numpy     as n
@@ -43,23 +45,26 @@ def showSlices(planar_paths_list, title=None, modes=None, argss=None):
     figargs['figure'] = title
   mlab.figure(**figargs)
   for (planar_paths, mode, args) in it.izip(planar_paths_list, it.cycle(modes), it.cycle(argss)):
-    showSlicesType(planar_paths, mode, args)
+    showSlicesType(planar_paths, mode=mode, args=args)
   mlab.show()
 
 def showSlicesType(planar_paths, mode=None, args={}):
   if mode=='tube':
-    for z, paths in planar_paths:
+    for z, paths, scaling in planar_paths:
+      applyScaling = isinstance(paths, c.ClipperPaths)
       for path in paths:
+        if applyScaling:
+          path = path * scaling
         zv = n.empty((path.shape[0],))
         zv.fill(z)
         mlab.plot3d(path[:,0], path[:,1], zv, **args)
   else:
     uselines = mode=='line'
     #make a list of pairs (cycle, z), composed from both contours and holes with their respective z's
-    allcycles = list(it.chain.from_iterable( zip(paths, it.cycle((z,)))
-                                             for z,paths in planar_paths))
+    allcycles = list(it.chain.from_iterable( zip(paths, it.cycle((z,)), it.cycle((scaling,)), it.cycle((isinstance(paths, c.ClipperPaths),)))
+                                             for z,paths,scaling in planar_paths))
     #get cycle sizes    
-    cyclessizes = list(cycle.shape[0] for cycle, z in allcycles)
+    cyclessizes = list(cycle.shape[0] for cycle, z, _, _ in allcycles)
     #get cumulative starting index for each cycle
     cyclestartidxs = n.roll(n.cumsum(cyclessizes), 1)
     cyclestartidxs[0] = 0
@@ -71,10 +76,14 @@ def showSlicesType(planar_paths, mode=None, args={}):
     cyclesz  = n.empty((cyclesx.shape[0],))
     conns  = n.empty((cyclesx.shape[0],2))
     #iterate over each cycle's starting index, size, and z
-    for startidx, size, (cycle,z) in it.izip(cyclestartidxs, cyclessizes, allcycles):
+    for startidx, size, (cycle,z,scaling,applyScalingFactor) in it.izip(cyclestartidxs, cyclessizes, allcycles):
       endidx = startidx+size
-      cyclesx[startidx:endidx] = cycle[:,0]       #set x for the current cycle
-      cyclesy[startidx:endidx] = cycle[:,1]       #set y for the current cycle
+      if applyScalingFactor:
+        cyclesx[startidx:endidx] = cycle[:,0]*scaling       #set x for the current cycle
+        cyclesy[startidx:endidx] = cycle[:,1]*scaling       #set y for the current cycle
+      else:
+        cyclesx[startidx:endidx] = cycle[:,0]       #set x for the current cycle
+        cyclesy[startidx:endidx] = cycle[:,1]       #set y for the current cycle
       cyclesz[startidx:endidx] = z                #set z for the current cycle
       rang = n.arange(startidx, endidx)
       conns[startidx:endidx,0] = rang    #set line connections for the current cycle
@@ -83,8 +92,8 @@ def showSlicesType(planar_paths, mode=None, args={}):
       if uselines:
         conns[startidx, 1] = rang[1]
     #put all the processed data into mayavi
-    #cyclesx *= scalingFactor
-    #cyclesy *= scalingFactor
+    #cyclesx *= scaling
+    #cyclesy *= scaling
     src = mlab.pipeline.scalar_scatter(cyclesx,cyclesy,cyclesz)
     src.mlab_source.dataset.lines = conns # Connect them
     lines = mlab.pipeline.stripper(src) # The stripper filter cleans up connected lines

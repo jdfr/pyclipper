@@ -10,9 +10,14 @@ TYPE_RAW_CONTOUR       = 0
 TYPE_PROCESSED_CONTOUR = 1
 TYPE_TOOLPATH          = 2
 
+SAVEMODE_INT64         = 0
+SAVEMODE_DOUBLE        = 1
+
+scalingFactor          = 0.00000001
+
 ALL_TYPES              = [TYPE_RAW_CONTOUR, TYPE_PROCESSED_CONTOUR, TYPE_TOOLPATH]
 
-InputPath = namedtuple('InputPath', ['type', 'ntool', 'z', 'paths'])
+InputPath = namedtuple('InputPath', ['type', 'ntool', 'z', 'paths', 'scaling'])
 FileContents = namedtuple('FileContents', ['numtools', 'xradiuses', 'zradiuses', 'numpaths', 'paths', 'zs'])
 
 craw = '#cccccc' #gray
@@ -75,15 +80,22 @@ def readFile(filename):
   pathsbytype = dict()
   allzs       = set()
   for i in xrange(numpaths):
-    typ       = f.readInt64()
-    ntool     = f.readInt64()
-    z         = f.readDouble()
-    dpaths    = clipper.ClipperDPaths()
-    #dpaths    = clipper.ClipperPaths()
+    header = (f.readInt64(), f.readInt64(), f.readInt64(), f.readInt64(), f.readDouble(), f.readInt64(), f.readDouble())
+    numbytes, headersiz, typ, ntool, z, savemode, scaling = header
+    #print header
+    for ii in xrange(headersiz-len(header)*8):
+      dummy   = f.readInt64()
+    if   savemode==SAVEMODE_INT64:
+      dpaths  = clipper.ClipperPaths()
+    elif savemode==SAVEMODE_DOUBLE:
+      dpaths  = clipper.ClipperDPaths()
+    else:
+      sys.stderr.write("While reading file %s, save format of %d-th paths is %d, but this value is not recognized!!!" % (filename if not filename is None else "standard input", i, savemode))
+      sys.exit()
     dpaths.fromStream(f)
     key1      = (typ, ntool)
     key2      = z
-    value     = InputPath(typ, ntool, z, dpaths)
+    value     = InputPath(typ, ntool, z, dpaths, scaling)
     allzs.add(z)
     if not key1 in pathsbytype:
       pathsbytype[key1] = {key2:value}
@@ -117,6 +129,7 @@ def show2D(contents, windowname, custom_formatting):
   #so all lists have the same number of elements, and are Z-ordered
   nelems            = contents.numtools*2+1
   pathsbytype_list  = [None]*nelems
+  scalings_list     = [None]*nelems
   usePatches_list   = [None]*nelems
   linestyles_list   = [None]*nelems
   patchestyles_list = [None]*nelems
@@ -124,15 +137,19 @@ def show2D(contents, windowname, custom_formatting):
     typ, ntool = key
     if not typ in ALL_TYPES:
       raise Exception('Unrecognized path type %d' % typ)
-    byz = contents.paths[key]
-    byzl = []
+    byz   = contents.paths[key]
+    byzl  = []
+    byzls = []
     for z in contents.zs:
       if z in byz:
-        byzl.append(byz[z].paths)
+        byzl .append(byz[z].paths)
+        byzls.append(byz[z].scaling)
       else:
-        byzl.append([])
+        byzl .append([])
+        byzls.append([])
     idx                      = showlistidx(typ, ntool)
     pathsbytype_list[idx]    = byzl
+    scalings_list   [idx]    = byzls
     if nocustom:
       if   typ==TYPE_RAW_CONTOUR:
         usePatches_list[idx]   = True
@@ -157,8 +174,8 @@ def show2D(contents, windowname, custom_formatting):
         usePatches_list[idx]   = custom_formatting[typs][ntool%length]['usepatches']
         linestyles_list[idx]   = custom_formatting[typs][ntool%length]['linestyle']
         patchestyles_list[idx] = custom_formatting[typs][ntool%length]['patchstyle']
-  
-  p2.showSlices(pathsbytype_list, modeN=True, title=windowname, BB=0, zs=contents.zs, linestyle=linestyles_list, patchArgs=patchestyles_list, usePatches=usePatches_list, scalingFactor=1.0)
+
+  p2.showSlices(pathsbytype_list, modeN=True, title=windowname, BB=[], zs=contents.zs, linestyle=linestyles_list, patchArgs=patchestyles_list, usePatches=usePatches_list, scalingFactor=scalings_list)
 
 def show3D(contents, windowname, custom_formatting):
   nocustom  = custom_formatting is None
@@ -174,7 +191,7 @@ def show3D(contents, windowname, custom_formatting):
     byzl = []
     for z in contents.zs:
       if z in byz:
-        byzl.append([z, byz[z].paths])
+        byzl.append([z, byz[z].paths, byz[z].scaling])
     idx                      = showlistidx(typ, ntool)
     paths_list[idx]          = byzl
     if nocustom:
@@ -220,7 +237,7 @@ def check_args(cond, errmsg):
              "    pipe: will read data from binary stdin\n"
              "    file INPUTFILENAME: will read data from input file\n"
              "    CUSTOMFORMATTING: if present, it is evaluated to a python structure containing formatting info. It is 2d/3d mode dependent, and no check is done, so it is very brittle, please see the code."
-             )
+             ) % sys.argv[0]
     sys.stderr.write(errmsg+USAGE)
     sys.exit()
 

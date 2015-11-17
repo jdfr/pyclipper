@@ -5,6 +5,7 @@ import sys
 import time
 
 debugfile = "cosa.log"
+scalingFactor = 0.00000001
 
 if __name__ == "__main__":
   if len(sys.argv)<3:
@@ -55,7 +56,7 @@ if __name__ == "__main__":
     # linestyles[i] = {'linestyle':'-', 'marker':'None', 'linewidth': 2.0, 'color':p2.colorlist[i]}
     linestyles[i] = {'facecolors': 'None', 'edgecolors': p2.colorlist[i], 'linewidths': 2.0}
     
-  p2.showOpenClipperPaths(paths, title=windowname)
-  #p2.showSlices(paths, modeN=True, title=windowname, linestyle=linestyles, patchArgs=defaultPatchArgs)#,BB=bb, fig=makeMaximizedFig())
+  p2.showOpenClipperPaths(paths, title=windowname, scalingFactor=scalingFactor)
+  #p2.showSlices(paths, scalingFactor=scalingFactor, modeN=True, title=windowname, linestyle=linestyles, patchArgs=defaultPatchArgs)#,BB=bb, fig=makeMaximizedFig())
   
     

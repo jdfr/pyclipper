@@ -25,7 +25,7 @@ from   matplotlib.patches import PathPatch
 from   matplotlib.lines   import Line2D
 import matplotlib.collections as pc
 
-def scaleObject(obj, scalingFactor=0.000001):
+def scaleObject(obj, scalingFactor=0.00000001):
   if isinstance(obj, n.ndarray):
     return obj*scalingFactor
   elif isinstance(obj, (c.ClipperPaths, list, tuple)):
@@ -33,10 +33,10 @@ def scaleObject(obj, scalingFactor=0.000001):
   else:
     raise Exception('Cannot recognize this object type: '+str(type(obj)))
 
-def showOpenClipperPaths(paths, fig=None, ax=None, show=True, title=None, **kwargs):
+def showOpenClipperPaths(paths, scalingFactor=0.00000001, fig=None, ax=None, show=True, title=None, **kwargs):
   if fig is None: fig = plt.figure(frameon=False)
   if ax  is None: ax  = fig.add_subplot(111, aspect='equal')
-  """lines = scaleObject(paths)
+  """lines = scaleObject(paths, scalingFactor)
   lc = pc.LineCollection(lines, **kwargs)
   ax.add_collection(lc)
   ax.autoscale()
@@ -44,10 +44,10 @@ def showOpenClipperPaths(paths, fig=None, ax=None, show=True, title=None, **kwar
     plt.show()"""
   for i, path in enumerate(paths):
     if path[0].dtype==n.int64:
-      pathseq = [p*0.000001 for p in path]
+      pathseq = [p*scalingFactor for p in path]
     else:
       pathseq = [p for p in path]
-    pathc = pc.LineCollection(pathseq, colors=colorlist[i % len(colorlist)])
+    pathc = pc.LineCollection(pathseq, colors=colorlist[i % len(colorlist)], **kwargs)
     ax.add_collection(pathc)
   ax.autoscale()
   if title: fig.canvas.set_window_title(title)
@@ -73,15 +73,11 @@ defaultPatchArgss = [
                       {'facecolor':colorlist[6], 'edgecolor':'#000000', 'lw':0.75},
                       ]
 
-def object2DToPatches(obj, sliceindex=None, linestyle=None, patchArgs=defaultPatchArgs):
+def object2DToPatches(obj, scalingFactor=0.00000001, sliceindex=None, linestyle=None, patchArgs=defaultPatchArgs):
   """Universial conversion of objects to iterators of patches. It works for:
       -numpy.ndarray (bi-dimensional)
-      -pyslic3r.ExPolygon
-      -pyslic3r.Layer
-      -pyslic3r.SlicedModel     (only the layer specified by sliceindex)
-      -pyslic3r.SliceCollection (only the layer specified by sliceindex)
-      -pyslic3r.ClipperPaths
-      -pyslic3r.ClipperPolyTree
+      -ClipperPaths
+      -ClipperDPaths
       -list/tuple of any of these objects except SlicedModel/SliceCollection (if sliceindex is not None, only the layer specified by sliceindex)
       -iterable   of any of these objects except SlicedModel/SliceCollection
     The result is always an iterable object with a sequence of patches
@@ -90,37 +86,23 @@ def object2DToPatches(obj, sliceindex=None, linestyle=None, patchArgs=defaultPat
       return []
   if isinstance(obj, n.ndarray):
     contour         = obj
-    paths           = (contours2path([contour]),)
-  elif  hasattr(obj, 'contour') and hasattr(obj, 'holes'):    #isinstance(obj, SlicedModel.ExPolygon):
-    expolygon       = obj
-    paths           = (expolygon2path(expolygon.contour, expolygon.holes),)
-  elif  hasattr(obj, 'expolygons'): #isinstance(obj, SlicedModel.Layer):
-    layer           = obj
-    paths           = (expolygon2path(exp.contour, exp.holes) for exp in layer.expolygons)
-  elif  hasattr(obj, 'slices'):     #isinstance(obj, SlicedModel.SliceCollection):
-    slicecollection = obj
-    if sliceindex is None: raise ValueError('if the first argument is a SliceCollection, second argument must be an index')
-    return object2DToPatches(slicecollection.slices[sliceindex], linestyle=linestyle, patchArgs=patchArgs)
-  elif  hasattr(obj, 'toExPolygonList'): #isinstance(obj, p.SlicedModel):
-    if sliceindex is None: raise ValueError('if the first argument is a SlicedModel,     second argument must be an index')
-    slicedmodel     = obj
-    paths           = (expolygon2path(exp.contour, exp.holes) for exp in slicedmodel[sliceindex,:])
+    paths           = (contours2path([contour], scalingFactor=scalingFactor),)
   elif isinstance(obj, c.ClipperPaths):
     clipperpaths    = obj
     contours        = (x for x in clipperpaths)
-    paths           = (contours2path(contours),)
-  elif isinstance(obj, c.ClipperPolyTree):
-    return object2DToPatches(c.ClipperObjects2SlicedModel([obj], n.array(0.0)), linestyle=linestyle, patchArgs=patchArgs)
+    paths           = (contours2path(contours, scalingFactor=scalingFactor),)
   elif hasattr(obj, '__getitem__'):
     if sliceindex is not None:
-      return object2DToPatches(obj[sliceindex], linestyle=linestyle, patchArgs=patchArgs)
+      s = scalingFactor if not hasattr(obj, '__getitem__') else scalingFactor[sliceindex]
+      return object2DToPatches(obj[sliceindex], scalingFactor=s, linestyle=linestyle, patchArgs=patchArgs)
     if all(isinstance(x, n.ndarray) for x in obj):
       contours = obj
-      paths    = (contours2path(contours),)
+      paths    = (contours2path(contours, scalingFactor=scalingFactor),)
     else:
       raise Exception('if sliceindex is None and obj is indexable, all elements in obj must be arrays')
   elif hasattr(obj, 'next'):
-    return it.chain(object2DToPatches(x, linestyle=linestyle, patchArgs=patchArgs) for x in obj)
+    ss = scalingFactor if hasattr(obj, '__getitem__') else it.cycle([scalingFactor])
+    return it.chain(object2DToPatches(x, scalingFactor=s, linestyle=linestyle, patchArgs=patchArgs) for x, s in it.izip(obj, ss))
   else:
     raise Exception('Cannot convert this object type to patches: '+str(type(obj)))
     
@@ -131,22 +113,24 @@ def object2DToPatches(obj, sliceindex=None, linestyle=None, patchArgs=defaultPat
   
   return patches
   
-def object2Lines(obj, sliceindex=None, linestyle=None):
+def object2Lines(obj, scalingFactor=0.00000001, sliceindex=None, linestyle=None):
   if obj==[] or obj==None:
       return None
   if isinstance(obj, c.ClipperPaths):
-    pathseq         = (x*0.000001 for x in obj)
+    pathseq         = (x*scalingFactor for x in obj)
   elif isinstance(obj, c.ClipperDPaths):
     pathseq         = (x for x in obj)
   elif hasattr(obj, '__getitem__'):
     if sliceindex is not None:
-      return object2Lines(obj[sliceindex], linestyle=linestyle)
+      s = scalingFactor if not hasattr(obj, '__getitem__') else scalingFactor[sliceindex]
+      return object2Lines(obj[sliceindex], linestyle=linestyle, scalingFactor=s)
     if all(isinstance(x, n.ndarray) for x in obj):
       pathseq       = (x for x in obj)
     else:
       raise Exception('if sliceindex is None and obj is indexable, all elements in obj must be arrays')
   elif hasattr(obj, 'next'):
-    return it.chain(object2Lines(x, linestyle=linestyle) for x in obj)
+    ss = scalingFactor if hasattr(obj, '__getitem__') else it.cycle([scalingFactor])
+    return it.chain(object2Lines(x, linestyle=linestyle, scalingFactor=s) for x, s in izip(obj, ss))
   else:
     raise Exception('Cannot convert this object type to lines: '+str(type(obj)))
   if linestyle is None:
@@ -154,7 +138,7 @@ def object2Lines(obj, sliceindex=None, linestyle=None):
   else:
     return pc.LineCollection(pathseq, **linestyle)
     
-def contours2path(contours, scalingFactor=0.000001):
+def contours2path(contours, scalingFactor=0.00000001):
   """helper function for object2DToPatches()"""
   contours        = [n.vstack((c, c[0,:])) for c in contours] #close the contours
   sizes           = n.array([x.shape[0] for x in contours])
@@ -171,26 +155,20 @@ def contours2path(contours, scalingFactor=0.000001):
     codes[accums] = Path.MOVETO
   return Path(vertices, codes)
 
-def expolygon2path(contour, holes):
-  """helper function for object2DToPatches"""
-  allpols       = [contour]+holes
-  return contours2path(allpols)
-
-def getBoundingBox(obj):
+def getBoundingBox(obj, scalingFactor=0.00000001):
   """get the bounding box for a variety of objects"""
-  if hasattr(obj, 'getBoundingBox'): #isinstance(obj, p.SlicedModel):
-    return obj.getBoundingBox()
+  #if hasattr(obj, 'getBoundingBox'): #isinstance(obj, p.SlicedModel):
+  #  return obj.getBoundingBox()
+  if obj is None: return (n.inf, -n.inf, n.inf, -n.inf)
   if   isinstance(obj, n.ndarray):
     minx, miny = obj.min(axis=0)
     maxx, maxy = obj.max(axis=0)
     return (minx, maxx, miny, maxy)
-  if hasattr(obj, 'contour'):            return getBoundingBox(obj.contour)    #SlicedModel.ExPolygon, no need to bother with the holes
-  if hasattr(obj, 'expolygons'):         return getBoundingBox(obj.expolygons) #SlicedModel.Layer
-  if hasattr(obj, 'slices'):             return getBoundingBox(obj.slices)     #SlicedModel.SliceCollection
-  if isinstance(obj, c.ClipperPaths):    return getBoundingBox([x for x in obj])
+  if hasattr(obj, 'contour'):            return getBoundingBox(obj.contour)    #no need to bother with the holes
+  if isinstance(obj, c.ClipperPaths):    return getBoundingBox([x*scalingFactor for x in obj])
   if isinstance(obj, c.ClipperDPaths):   return getBoundingBox([x for x in obj])
-  if isinstance(obj, c.ClipperPolyTree): return getBoundingBox(c.ClipperObjects2SlicedModel([obj], n.array(0.0)))
   if hasattr(obj, '__getitem__'):
+    if len(obj)==0: return (n.inf, -n.inf, n.inf, -n.inf)
     minxs, maxxs, minys, maxys = zip(*[getBoundingBox(x) for x in obj])
     minx = min(minxs)
     maxx = max(maxxs)
@@ -199,7 +177,7 @@ def getBoundingBox(obj):
     return (minx, maxx, miny, maxy)
   raise Exception('Cannot compute the bounding box for object of type: '+str(type(obj)))
 
-def show2DObject(obj, sliceindex=0, ax=None, usePatches=True, linestyle=None, patchArgs=defaultPatchArgs, show=True, returnpatches=False):
+def show2DObject(obj, scalingFactor=0.00000001, sliceindex=0, ax=None, usePatches=True, linestyle=None, patchArgs=defaultPatchArgs, show=True, returnpatches=False):
   """Universal show function for slice objects. It works for many kinds of objects,
      see objectToPatches() for a list"""
   """minx = n.inf  
@@ -211,7 +189,7 @@ def show2DObject(obj, sliceindex=0, ax=None, usePatches=True, linestyle=None, pa
     fig     = plt.figure()
     ax      = fig.add_subplot(111, aspect='equal')
   if usePatches:
-    objects   = object2DToPatches(obj, sliceindex, linestyle, patchArgs)
+    objects   = object2DToPatches(obj, scalingFactor=scalingFactor, sliceindex=sliceindex, linestyle=linestyle, patchArgs=patchArgs)
     if returnpatches:
       objects = list(objects)
     useline   = linestyle is not None
@@ -230,7 +208,7 @@ def show2DObject(obj, sliceindex=0, ax=None, usePatches=True, linestyle=None, pa
         maxx = max(maxx, vsmax[0])
         maxy = max(maxy, vsmax[1])"""
   else:
-    objects = object2Lines(obj, sliceindex, linestyle)
+    objects = object2Lines(obj, scalingFactor=scalingFactor, sliceindex=sliceindex, linestyle=linestyle)
     if returnpatches:
       objects = [objects]
     if objects!=None:
@@ -259,10 +237,12 @@ def show2DObject(obj, sliceindex=0, ax=None, usePatches=True, linestyle=None, pa
   if returnpatches:
     return objects
 
-def show2DObjectN(objs, sliceindexes=None, ax=None, usePatchess=None, linestyles=None, patchArgss=None, show=True, returnpatches=False):
+def show2DObjectN(objs, scalingFactor=None, sliceindexes=None, ax=None, usePatchess=None, linestyles=None, patchArgss=None, show=True, returnpatches=False):
   """use mayavi to plot a list of objects (mainly for SlicedModels, but should
   work for the others listed in objectToPatches()'s help"""
-  
+
+  if not scalingFactor:
+    scalingFactor = it.cycle([0.00000001])
   if not sliceindexes:
     sliceindexes = [0]
   if not patchArgss:
@@ -276,8 +256,8 @@ def show2DObjectN(objs, sliceindexes=None, ax=None, usePatchess=None, linestyles
     ax  = fig.add_subplot(111, aspect='equal')
   allpatches = [None]*len(objs)
   
-  for idx, (obj, sliceIndex, linestyle, patchArgs, usePatches), in enumerate(it.izip(objs, it.cycle(sliceindexes), it.cycle(linestyles), it.cycle(patchArgss), it.cycle(usePatchess))):
-    ps = show2DObject(obj, sliceindex=sliceIndex, ax=ax, linestyle=linestyle, patchArgs=patchArgs, show=False, usePatches=usePatches, returnpatches=returnpatches)
+  for idx, (obj, sliceIndex, linestyle, patchArgs, usePatches, ss), in enumerate(it.izip(objs, it.cycle(sliceindexes), it.cycle(linestyles), it.cycle(patchArgss), it.cycle(usePatchess), scalingFactor)):
+    ps = show2DObject(obj, scalingFactor=ss, sliceindex=sliceIndex, ax=ax, linestyle=linestyle, patchArgs=patchArgs, show=False, usePatches=usePatches, returnpatches=returnpatches)
     if returnpatches:
       allpatches[idx] = ps
   if show:
@@ -286,7 +266,7 @@ def show2DObjectN(objs, sliceindexes=None, ax=None, usePatchess=None, linestyles
     return allpatches
 
 
-def showSlices(data, modeN=False, fig=None, ax=None, title=None, initindex=0, BB=-1, zs=None, usePatches=None, linestyle=None, patchArgs=None, show=True, handleEvents=True, scalingFactor=0.000001):
+def showSlices(data, modeN=False, fig=None, ax=None, title=None, initindex=0, BB=-1, zs=None, usePatches=None, linestyle=None, patchArgs=None, show=True, handleEvents=True, scalingFactor=0.00000001):
   """Advanced 2D viewer for objects representing sequences of slices (modeN=False)
   or lists/tuples of such objects to be paint at the same time (modeN=True). Use the
   up/down arrow keys to move up/down in the stack of slices. If provided
@@ -305,15 +285,18 @@ def showSlices(data, modeN=False, fig=None, ax=None, title=None, initindex=0, BB
   #           *if data is a SlicedModel, we set it to its bounding box
   #     -if data is a list and BB is an empty list, we generate it from all the bounding boxes
   #     -otherwise, we trust that it is a tuple (minx, maxx, miny, maxy), such as the tuple produced by getBoundingBox
+  if modeN:
+    if type(scalingFactor)!=list:
+      scalingFactor = [scalingFactor]*len(data)
   if type(BB)==int:
     if modeN:
-      BB = getBoundingBox(data[BB])
+      BB = getBoundingBox(data[BB], scalingFactor[BB])
     else:
-      BB = getBoundingBox(data)
+      BB = getBoundingBox(data, scalingFactor)
   elif BB==[] and modeN:
-    Bs = [getBoundingBox(d) for d in data]
+    Bs = [getBoundingBox(d, s) for d, s in zip(data, scalingFactor)]
     BB = [fun([B[k] for B in Bs]) for k, fun in enumerate([min, max, min, max])]
-  useBB      = BB is not None
+  useBB      = BB is not None and not n.any(n.isinf(BB))
 
   #initial common setup
   if fig is None: fig = plt.figure(frameon=False)
@@ -324,10 +307,10 @@ def showSlices(data, modeN=False, fig=None, ax=None, title=None, initindex=0, BB
   txt   = ax.set_title('Layer X/X')
   if useBB:
     minx, maxx, miny, maxy = BB
-    cx = (maxx+minx)/2.0*scalingFactor
-    cy = (maxy+miny)/2.0*scalingFactor
-    dx = (maxx-minx)    *scalingFactor
-    dy = (maxy-miny)    *scalingFactor
+    cx = (maxx+minx)/2.0
+    cy = (maxy+miny)/2.0
+    dx = (maxx-minx)
+    dy = (maxy-miny)
     fac            = 1.1
     minx = cx-dx*fac
     maxx = cx+dx*fac
@@ -341,7 +324,7 @@ def showSlices(data, modeN=False, fig=None, ax=None, title=None, initindex=0, BB
     if patchArgs is None: patchArgs = defaultPatchArgss
     leng    = max([len(x) for x in data if not x is None])
     showfun = show2DObjectN
-    args    = lambda: dict(usePatchess=usePatches, linestyles=linestyle, patchArgss=patchArgs, sliceindexes=index)
+    args    = lambda: dict(scalingFactor=scalingFactor, usePatchess=usePatches, linestyles=linestyle, patchArgss=patchArgs, sliceindexes=index)
     def remove(allpatches):
       for patches in allpatches:
         for patch in patches:
@@ -352,7 +335,7 @@ def showSlices(data, modeN=False, fig=None, ax=None, title=None, initindex=0, BB
     if patchArgs is None: patchArgs = defaultPatchArgs
     leng    = len(data)
     showfun = show2DObject
-    args    = lambda: dict(usePatches=usePatches, linestyle=linestyle,  patchArgs=patchArgs,  sliceindex=index[0])
+    args    = lambda: dict(scalingFactor=scalingFactor, usePatches=usePatches, linestyle=linestyle,  patchArgs=patchArgs,  sliceindex=index[0])
     def remove(patches):
       for patch in patches:
         patch.remove()
