@@ -84,7 +84,10 @@ def showSlicesType(planar_paths, mode=None, args={}):
       else:
         cyclesx[startidx:endidx] = cycle[:,0]       #set x for the current cycle
         cyclesy[startidx:endidx] = cycle[:,1]       #set y for the current cycle
-      cyclesz[startidx:endidx] = z                #set z for the current cycle
+      if cycle.shape[1]<3:
+        cyclesz[startidx:endidx] = z                #set z for the current cycle
+      else:
+        cyclesz[startidx:endidx] = cycle[:,2]       #set z for the current cycle
       rang = n.arange(startidx, endidx)
       conns[startidx:endidx,0] = rang    #set line connections for the current cycle
       conns[startidx+1:endidx,1] = rang[:-1]
