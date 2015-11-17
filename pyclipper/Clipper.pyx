@@ -35,6 +35,7 @@ cnp.import_array()
 
 cdef extern from "numpy/ndarraytypes.h" nogil:
   int NPY_ARRAY_CARRAY
+  int NPY_ARRAY_FARRAY
 
 cimport cpython.ref as ref
 
@@ -524,6 +525,8 @@ cdef class File:
       self.doclose = True
       #CANNOT PORT DIRECTLY TO PYTHON 3: THIS STATEMET PRODUCES A SEGFAULT OR SOMETHING LIKE THAT IN WINPYTHON 3.4, BUT WORKS ON WINPYTHON 2.7.9
       self.f       = io.fopen(stream, mode)
+      #if self.f==NULL:
+      #  raise Exception("Could not open file "+stream)
     elif stream is None:
       self.doclose = False
       if write:
@@ -536,9 +539,15 @@ cdef class File:
       if Windows:
         msvcrt.setmode(fileno, os.O_BINARY)
       self.f       = io.fdopen(fileno, mode)
+      #if self.f==NULL:
+      #  if write: raise Exception('Could not reopen stdout')
+      #  else:     raise Exception('Could not reopen stdin')
     else:
       raise IOError("This class can only open new files or reopen stdin/stdout")
-  
+
+  def isValid(self):
+    return self.f!=NULL
+      
   cpdef close(self):
     """close the file just once, if it has to be done"""
     if self.doclose:
@@ -576,6 +585,25 @@ cdef class File:
     """make sure it is closed"""
     self.close()
 
+def read3DDoublePathsFromFile(File f):
+  cdef cnp.npy_intp *dims  = [0,3]
+  cdef cnp.int64_t numpaths
+  cdef cnp.int64_t numpoints
+  cdef cnp.int64_t i
+  cdef cnp.int64_t numread
+  cdef cnp.ndarray  points
+  cdef list paths
+  if io.fread(&numpaths, sizeof(numpaths),  1, f.f)!=1: raise IOError
+  paths = [None]*numpaths
+  for i in range(numpaths):
+    if io.fread(&numpoints, sizeof(numpaths),  1, f.f)!=1: raise IOError
+    dims[0] = numpoints
+    numread = numpoints*3
+    points = cnp.PyArray_EMPTY(2, dims, cnp.NPY_FLOAT64, 0)
+    if io.fread(points.data, sizeof(cnp.float64_t),  numread, f.f)!=<cnp.uint64_t>numread: raise IOError
+    paths[i] = points
+  return paths
+  
 def ClipperPathsAndZsToStream(c.cInt npths, object pathsAndZss, object stream):
   """from a sequence of pairs (ClipperPaths,zs), where zs is itself a sequence of double values,
   write to a filename, a file object or stdout (if stream is None)"""
@@ -836,7 +864,7 @@ cdef cnp.ndarray DPath2arrayView(ClipperDPaths parent, DPath *path):
   the returned array is a view into the underlying data"""
   cdef void         *data  = &(path[0][0].X)
   cdef cnp.npy_intp *dims  = [path[0].size(),2]
-  cdef cnp.ndarray  result = cnp.PyArray_New(np.ndarray, 2, dims, cnp.NPY_DOUBLE, pointstrides,
+  cdef cnp.ndarray  result = cnp.PyArray_New(np.ndarray, 2, dims, cnp.NPY_DOUBLE, dpointstrides,
                                              data, -1, NPY_ARRAY_CARRAY, <object>NULL)
   ##result.base is of type PyObject*, so no reference counting with this assignment
   result.base              = <ref.PyObject*>parent
