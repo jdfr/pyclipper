@@ -10,3 +10,5 @@ private
 build
 cmakebuild
 doc
+mk.bat
+cmake.configvars.txt
