@@ -50,6 +50,12 @@ def showOpenClipperPaths(paths, scalingFactor=0.00000001, fig=None, ax=None, sho
     pathc = pc.LineCollection(pathseq, colors=colorlist[i % len(colorlist)], **kwargs)
     ax.add_collection(pathc)
   ax.autoscale()
+  xlim = ax.get_xlim()
+  ylim = ax.get_ylim()
+  dd = max(abs(xlim[1]-xlim[0]), abs(ylim[1]-ylim[0]))
+  shift = dd*0.1
+  ax.set_xlim([xlim[0]-shift, xlim[1]+shift])
+  ax.set_ylim([ylim[0]-shift, ylim[1]+shift])
   if title: fig.canvas.set_window_title(title)
   if show:
     plt.show()
