@@ -37,7 +37,7 @@ description = "Python wrapper for ClipperLib library"
 if not WINDOWS and standalone:
   #disable these horribly annoying warnings
   (opt,) = get_config_vars('OPT')
-  opt   += ' -Wno-unused-local-typedefs -Wno-unused-function -Wno-cpp'
+  opt   += ' -Wno-unused-local-typedefs -Wno-unused-function -Wno-cpp -Wno-unused-variable'
   opt    = " ".join(
       flag for flag in opt.split() if flag != '-Wstrict-prototypes'
   )
