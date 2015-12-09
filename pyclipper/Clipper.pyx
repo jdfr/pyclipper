@@ -306,7 +306,17 @@ cdef class ClipperPaths:
   to do Clipper operations on the data, the end results to be incorporated back
   into another kind of object"""
 
-  def __cinit__(self):       self.thisptr = new c.Paths()
+  def __cinit__(self, obj=None):
+    cdef ClipperPaths other
+    self.thisptr = new c.Paths()
+    if not (obj is None):
+      if isinstance(obj, ClipperPaths):
+        other = obj
+        self.thisptr[0] = other.thisptr[0]
+      elif isinstance(obj, list):
+        numpyList2ClipperPaths(obj, self)
+      else:
+        raise ValueError('Error: cannot initialize ClipperPaths with object of type %s' % str(type(obj)))
   def __dealloc__(self): del self.thisptr
 
   def __reduce__(self):
@@ -510,6 +520,32 @@ cdef class ClipperPaths:
     p.Y = y
     return c.PointInPolygon(p, self.thisptr[0][npath])
 
+@cython.boundscheck(False)
+cpdef numpyList2ClipperPaths(list arrays, ClipperPaths paths=None):
+  """convert a list of numpy arrays to a ClipperPaths object.
+  WARNING: the arrays must still be bidimensional, with two columns, and of type int64, otherwise the conversion will fail!"""
+  cdef cnp.npy_intp length = len(arrays)
+  cdef c.Path * path
+  cdef size_t npath, npoint, lenpoints
+  cdef cnp.ndarray[dtype=cnp.int64_t, ndim=2] array
+  cdef cnp.ndarray zs = cnp.PyArray_EMPTY(1, &length, cnp.NPY_FLOAT64, 0)
+  if paths is None:
+    paths = ClipperPaths()
+  else:
+    paths.thisptr[0].clear()
+  paths.thisptr[0].resize(length)
+  #for each layer
+  for npath in range(<size_t>length):
+    array                         = arrays[npath]
+    lenpoints                     = array.shape[0]
+    paths.thisptr[0][npath].resize(lenpoints)
+    path                          = &paths.thisptr[0][npath]
+    for npoint in range(lenpoints):
+      path[0][npoint].X           = array[npoint,0]
+      path[0][npoint].Y           = array[npoint,1]
+  return paths
+
+
 cdef PY3 = sys.version_info >= (3,0)
     
 cdef class File:
@@ -604,68 +640,6 @@ def read3DDoublePathsFromFile(File f):
     paths[i] = points
   return paths
   
-def ClipperPathsAndZsToStream(c.cInt npths, object pathsAndZss, object stream):
-  """from a sequence of pairs (ClipperPaths,zs), where zs is itself a sequence of double values,
-  write to a filename, a file object or stdout (if stream is None)"""
-  cdef bool         isfile = isinstance(stream, File)
-  cdef File         f
-  cdef double       z
-  cdef ClipperPaths paths
-  cdef c.cInt       numz
-  if isfile: f = stream
-  else:      f = File(stream, 'wb', True)
-  IF DEBUG:   writeDebug("STARTING WRITING %d clipperpaths (isfile=%d)\n" % (npths, isfile))
-  if     io.fwrite(&npths, sizeof(npths),  1, f.f)!=1: raise IOError
-  for paths,zs in pathsAndZss:
-    if not hasattr(zs, '__len__'):
-      zs    = (zs,)
-    numz    = len(zs)
-    IF DEBUG: writeDebug("  WRITING %d Zs: %s\n" % (numz, str(zs)))
-    if   io.fwrite(&numz,  sizeof(numz),   1, f.f)!=1: raise IOError
-    for z in zs:
-      if io.fwrite(&z,     sizeof(double), 1, f.f)!=1: raise IOError
-    paths.toFileObject(f.f)
-  if not isfile:
-    f.close()
-  
-@cython.boundscheck(False)
-def ClipperPathsAndZsFromStream(object stream, bool alsoYieldNumPaths=False, ClipperPaths template=None):
-  """for a file or a stream (wrapping a filename, a file-like object or stdin if 
-  stream is None), make a generator yielding pairs (ClipperPaths,zs), where zs is a 
-  sequence of doubles. Optionally, the first yielded object is the number of pairs.
-  If a template is provided, it is used as a basis for all extracted clipperPaths"""
-  cdef bool         isfile = isinstance(stream, File)
-  cdef File         f
-  cdef double       z
-  cdef cnp.ndarray  zs
-  cdef c.cInt       npths, numz
-  cdef int          k, m
-  cdef ClipperPaths paths
-  cdef bool         useTemplate = template is not None
-  IF DEBUG:     writeDebug("STARTING READING\n")
-  if isfile: f = stream
-  else:      f = File(stream, 'rb', False)
-  if     io.fread(&npths, sizeof(npths),  1, f.f)!=1: raise IOError
-  IF DEBUG:     writeDebug("READING NUMCLIPPERPATHS %d\n" % npths)
-  if alsoYieldNumPaths: yield npths
-  for k in range(npths):
-    if   io.fread(&numz,  sizeof(numz),   1, f.f)!=1: raise IOError
-    IF DEBUG:   writeDebug("  READING NUMZ %d\n" % numz)
-    zs      = np.empty((numz,))
-    for m in range(numz):
-      if io.fread(&z,     sizeof(double), 1, f.f)!=1: raise IOError
-      IF DEBUG: writeDebug("  READING Z %f\n" % z)
-      zs[m] = z
-    paths = ClipperPaths()
-    if useTemplate:
-      paths.thisptr[0] = template.thisptr[0]
-    paths.fromFileObject(f.f)
-    IF DEBUG:   writeDebug("  FINISHED READING CLIPPERPATH %d\n" % k)
-    yield (paths,zs)
-  if not isfile:
-    f.close()
-  
-    
 cdef class ClipperPolyTree:
   """Thin wrapper around Clipper::PolyTree. It is intended just as a temporary object
   to do Clipper operations on the data, the end results to be incorporated back
