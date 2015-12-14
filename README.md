@@ -10,7 +10,7 @@ Computationally expensive tasks such as clipping and offseting have to be done i
 
 `ClipperXXX` objects encapsulate ClipperLib objects: `ClipperPaths` and `ClipperPolyTree` wrap `ClipperLib:Paths` and `ClipperLib::PolyTree`, respectively, which are the main data types of ClipperLib. `ClipperClip` and `ClipperOffset` encapsulate the clipping and offseting engines, respectively.
 
-Most operations on these objects are also wrapped. Additionally, it is possible to show `ClipperPaths` using matplotlib or mayavi. The contours in these objects are exposed using custom accesors: the contours are casted as numpy matrices representing lists of points.
+Most operations on these objects are also wrapped. Additionally, it is possible to show `ClipperPaths` using matplotlib or mayavi, and read/write files containing `ClipperPaths` objects. The contours in these objects are exposed using custom accesors: the contours are casted as numpy matrices representing lists of points. `ClipperPaths` objects can be created from lists of numpy matrices containing lists of int64 coordinates, to enable the use of Python to do scripting on these objects. 
 
 ## Dependencies
 
@@ -24,7 +24,7 @@ From the python ecosystem, pyclipper has the following dependencies:
 * Matplotlib 1.4.2 (optional, for 2D plotting)
 * Mayavi 4.3.1 (optional, for 3D plotting)
 
-Please note that the project will probably compile with other versions of the dependencies, the numbers are just the versions used in development.
+Please note that the project will probably compile with other versions of the dependencies, the numbers are just the versions used in development. It has been tested only on CPython.
 
 ## How to compile
 
@@ -34,3 +34,4 @@ After the dependencies have been installed, you can proceed to compilation. To c
 python setup.py build_ext --inplace
 ```
 
+Alternatively, you can use the provided cmake script to copy the source files to another location and build the Cython extension there. The cmake script is also aware of the complexities of building if you are using a portable version of WinPython, for which the build process is not as straightforward as it is in other distributions.
