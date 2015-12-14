@@ -608,7 +608,7 @@ cdef class File:
   def write(self, object v):
     cdef cnp.int64_t v1
     cdef double      v2
-    if   isinstance(v, int):
+    if   isinstance(v, int) or isinstance(v, long):
       v1 = v
       if io.fwrite(&v1, sizeof(v1), 1, self.f)!=1: raise IOError
     elif isinstance(v, float):
