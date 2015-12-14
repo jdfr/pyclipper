@@ -72,11 +72,11 @@ def show2D(contents, windowname, custom_formatting):
   usePatches_list   = [None]*nelems
   linestyles_list   = [None]*nelems
   patchestyles_list = [None]*nelems
-  for key in contents.paths.keys():
+  for key in contents.records.keys():
     typ, ntool = key
     if not typ in rp.ALL_TYPES:
       raise Exception('Unrecognized path type %d' % typ)
-    byz   = contents.paths[key]
+    byz   = contents.records[key]
     byzl  = []
     byzls = []
     for z in contents.zs:
@@ -124,11 +124,11 @@ def show3D(contents, windowname, custom_formatting):
   paths_list      = [None]*nelems
   mode_list       = [None]*nelems
   args_list       = [None]*nelems
-  for key in contents.paths.keys():
+  for key in contents.records.keys():
     typ, ntool = key
     if not typ in rp.ALL_TYPES:
       raise Exception('Unrecognized path type %d' % typ)
-    byz = contents.paths[key]
+    byz = contents.records[key]
     byzl = []
     for z in contents.zs:
       if z in byz:
@@ -213,8 +213,9 @@ if __name__ == "__main__":
   else:
     custom_formatting = None
 
-  contents = rp.readFile(filename)
-  contents = rp.organizePaths(contents)
+  contents = rp.FileContents()
+  contents.readFromFile(filename)
+  contents.organizeRecords()
   
   if use2d:
     import pyclipper.plot2d as p2

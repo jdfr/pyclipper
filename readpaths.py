@@ -1,4 +1,5 @@
 import pyclipper.Clipper as clipper
+import numpy as n
 
 from collections import namedtuple
 
@@ -11,65 +12,123 @@ SAVEMODE_INT64         = 0
 SAVEMODE_DOUBLE        = 1
 SAVEMODE_DOUBLE_3D     = 2
 
-
-InputPath = namedtuple('InputPath', ['type', 'savemode', 'ntool', 'z', 'paths', 'scaling'])
-FileContents = namedtuple('FileContents', ['numtools', 'usezradiuses', 'xradiuses', 'zradiuses', 'numpaths', 'paths', 'zs'])
-
-def readFile(filename):
-  f = clipper.File(filename, 'rb', False)
-
-  #get paths by z
-  numtools    = f.readInt64()
-  useZRadiuses = f.readInt64()!=0
-  xradiuses   = [None]*numtools
-  zradiuses   = [None]*numtools
-  for idx in xrange(numtools):
-    xradiuses[idx] = f.readDouble()
-    if useZRadiuses:
-      zradiuses[idx] = f.readDouble()
-  numpaths    = f.readInt64()
-  #dictionary of dictionaries: the first key is (type, ntool), the second is z
-  paths       = [None] * numpaths
-  allzs       = set()
-  for i in xrange(numpaths):
+class PathsRecord:
+  def __init__(self, typ=None, ntool=None, z=None, savemode=None, scaling=None, paths=None):
+    self.numbytes   = -1
+    self.headersize = -1
+    self.type       = typ
+    self.ntool      = ntool
+    self.z          = z
+    self.savemode   = savemode
+    self.scaling    = scaling
+    self.paths      = paths
+    
+  def readFromFile(self, f):
     header = (f.readInt64(), f.readInt64(), f.readInt64(), f.readInt64(), f.readDouble(), f.readInt64(), f.readDouble())
-    numbytes, headersiz, typ, ntool, z, savemode, scaling = header
+    self.numbytes, self.headersize, self.type, self.ntool, self.z, self.savemode, self.scaling = header
     #print header
-    for ii in xrange(headersiz-len(header)*8):
+    for ii in xrange(self.headersize-len(header)*8):
       dummy   = f.readInt64()
-    if   savemode==SAVEMODE_INT64:
-      dpaths  = clipper.ClipperPaths()
-      dpaths.fromStream(f)
-    elif savemode==SAVEMODE_DOUBLE:
-      dpaths  = clipper.ClipperDPaths()
-      dpaths.fromStream(f)
-    elif savemode==SAVEMODE_DOUBLE_3D:
-      dpaths = clipper.read3DDoublePathsFromFile(f)
+    if   self.savemode==SAVEMODE_INT64:
+      self.paths = clipper.ClipperPaths()
+      self.paths.fromStream(f)
+    elif self.savemode==SAVEMODE_DOUBLE:
+      self.paths = clipper.ClipperDPaths()
+      self.paths.fromStream(f)
+    elif self.savemode==SAVEMODE_DOUBLE_3D:
+      self.paths = clipper.read3DDoublePathsFromFile(f)
     else:
-      raise Exception("While reading file %s, save format of %d-th paths is %d, but this value is not recognized!!!" % (filename if not filename is None else "standard input", i, savemode))
-    value     = InputPath(typ, savemode, ntool, z, dpaths, scaling)
-    paths[i]  = value
-    key1      = (typ, ntool)
-    key2      = z
-    allzs.add(z)
+      raise Exception("save format was declared as %d, but this value is not recognized!!!" % self.savemode)
   
-  f.close()  
-  
-  allzs = sorted(list(allzs))
-  return FileContents(numtools=numtools, usezradiuses=useZRadiuses, xradiuses=xradiuses, zradiuses=zradiuses, numpaths=numpaths, paths=paths, zs=allzs)
+  def writeToFile(self, f):
+    isclipper = isinstance(self.paths, clipper.ClipperPaths)
+    isdouble  = isinstance(self.paths, clipper.ClipperDPaths)
+    is3d      = isinstance(self.paths, (list, tuple)) and all([isinstance(p, n.ndarray) and len(p.shape)==2 and p.shape[1]==3 for p in self.paths])
+    if is3d:
+      raise Exception('Saving 3D paths is not supported for now')
+    if isclipper or isdouble or is3d:
+      siz = (1+len(self.paths)+sum(p.size for p in self.paths))*8
+    else:
+      raise Exception('type of paths (%s) is not writable!!!' % str(type(self.paths)))
+    header = [-1, -1, self.type, self.ntool, self.z, self.savemode, self.scaling]
+    header[1] = len(header)*8
+    header[0] = header[1]+siz
+    for h in header:
+      f.write(h)
+    if isclipper or isdouble:
+      self.paths.toStream(f)
+    elif is3d:
+      raise Exception('Saving 3D paths is not supported for now')
 
-def organizePaths(contents):
-  if type(contents.paths)==dict:
-    return contents
-  pathsbytype = dict()
-  for value in contents.paths:
-    key1      = (value.type, value.ntool)
-    key2      = value.z
-    if not key1 in pathsbytype:
-      pathsbytype[key1] = {key2:value}
-    elif not key2 in pathsbytype[key1]:
-      pathsbytype[key1][key2] = value
-    else:
-      raise Exception('repeated key combo type=%d, ntool=%d, z=%f' % (typ, ntool, z))
-      #pathsbytype[key1][key2].append(value)
-  return FileContents(numtools=contents.numtools, usezradiuses=contents.usezradiuses, xradiuses=contents.xradiuses, zradiuses=contents.zradiuses, numpaths=contents.numpaths, paths=pathsbytype, zs=contents.zs)
+class FileContents:
+  def __init__(self, numtools=None, usezradiuses=False, xradiuses=None, zradiuses=None, numpaths=None, records=None, zs=None):
+    self.numtools     = numtools
+    self.usezradiuses = usezradiuses
+    self.xradiuses    = xradiuses
+    self.zradiuses    = zradiuses
+    self.numpaths     = numpaths
+    self.records      = records
+    self.zs           = zs
+  
+  def readFromFile(self, filename):
+    f = clipper.File(filename, 'rb', False)
+    #get paths by z
+    self.numtools     = f.readInt64()
+    self.usezradiuses = f.readInt64()!=0
+    self.xradiuses    = [None]*self.numtools
+    self.zradiuses    = [None]*self.numtools
+    for idx in xrange(self.numtools):
+      self.xradiuses[idx]   = f.readDouble()
+      if self.usezradiuses:
+        self.zradiuses[idx] = f.readDouble()
+    
+    self.numpaths     = f.readInt64()
+    self.records      = [None] * self.numpaths
+    allzs            = set()
+    for i in xrange(self.numpaths):
+      value = PathsRecord()
+      try:
+        value.readFromFile(f)
+      except Exception as e:
+        v = str(e.args[0]) if len(e.args)==1 else str(e.args)
+        raise Exception("While reading record %d of file %s: %s" % (i, filename if not filename is None else "standard input", v))
+      self.records[i]  = value
+      allzs.add(value.z)
+    f.close()  
+    
+    self.zs = sorted(list(allzs))
+
+  def organizeRecords(self):
+    if type(self.records)==dict:
+      return
+    pathsbytype = dict()
+    for value in self.records:
+      key1      = (value.type, value.ntool)
+      key2      = value.z
+      if not key1 in pathsbytype:
+        pathsbytype[key1] = {key2:value}
+      elif not key2 in pathsbytype[key1]:
+        pathsbytype[key1][key2] = value
+      else:
+        raise Exception('repeated key combo type=%d, ntool=%d, z=%f' % (value.type, value.ntool, value.z))
+        #pathsbytype[key1][key2].append(value)
+    self.records = pathsbytype
+
+  def writeToFile(self, filename):
+    numpaths = int(len(self.records))
+    usez     = self.usezradiuses
+    f        = clipper.File(filename, 'wb', True)
+    f.write(self.numtools)
+    f.write(self.usezradiuses)
+    for idx in xrange(self.numtools):
+      f.write(self.xradiuses[idx])
+      if usez:
+        f.write(self.zradiuses[idx])
+    f.write(numpaths)
+    for idx in xrange(numpaths):
+      try:
+        self.records[idx].writeToFile(f)
+      except Exception as e:
+        v = str(e.args[0]) if len(e.args)==1 else str(e.args)
+        raise Exception("While writing record %d of file %s: %s" % (idx, filename if not filename is None else "standard output", v))
+    f
