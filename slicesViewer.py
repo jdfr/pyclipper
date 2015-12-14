@@ -1,5 +1,5 @@
 import sys
-import readpaths as rp
+import iopaths as io
 
 debugfile = "cosa.log"
 
@@ -51,14 +51,14 @@ ncmaps = len(cmaps_toolpaths)
 
 #index in the list (to be passed to showSlices) of each path type-ntool
 def showlistidx(typ, ntool):
-  return 0 if typ==rp.TYPE_RAW_CONTOUR else contents.numtools*(0 if typ==rp.TYPE_PROCESSED_CONTOUR else 1)+ntool+1
+  return 0 if typ==io.TYPE_RAW_CONTOUR else contents.numtools*(0 if typ==io.TYPE_PROCESSED_CONTOUR else 1)+ntool+1
 
 def type2str(typ):
-  if   typ==rp.TYPE_RAW_CONTOUR:
+  if   typ==io.TYPE_RAW_CONTOUR:
     return 'raw'
-  elif typ==rp.TYPE_PROCESSED_CONTOUR:
+  elif typ==io.TYPE_PROCESSED_CONTOUR:
     return 'contour'
-  elif typ==rp.TYPE_TOOLPATH:
+  elif typ==io.TYPE_TOOLPATH:
     return 'toolpath'
 
 def show2D(contents, windowname, custom_formatting):
@@ -74,14 +74,14 @@ def show2D(contents, windowname, custom_formatting):
   patchestyles_list = [None]*nelems
   for key in contents.records.keys():
     typ, ntool = key
-    if not typ in rp.ALL_TYPES:
+    if not typ in io.ALL_TYPES:
       raise Exception('Unrecognized path type %d' % typ)
     byz   = contents.records[key]
     byzl  = []
     byzls = []
     for z in contents.zs:
       if z in byz:
-        if byz[z].savemode==rp.SAVEMODE_DOUBLE_3D:
+        if byz[z].savemode==io.SAVEMODE_DOUBLE_3D:
           raise Exception('path with type=%d, ntool=%d, z=%f is 3D, cannot show it in matplotlib!!!!' % (typ, ntool, z))
         byzl .append(byz[z].paths)
         byzls.append(byz[z].scaling)
@@ -92,21 +92,21 @@ def show2D(contents, windowname, custom_formatting):
     pathsbytype_list[idx]    = byzl
     scalings_list   [idx]    = byzls
     if nocustom:
-      if   typ==rp.TYPE_RAW_CONTOUR:
+      if   typ==io.TYPE_RAW_CONTOUR:
         usePatches_list[idx]   = True
         linestyles_list[idx]   = None
         patchestyles_list[idx] = {'facecolor':craw, 'edgecolor':'none', 'lw': 1}
-      elif typ==rp.TYPE_PROCESSED_CONTOUR:
+      elif typ==io.TYPE_PROCESSED_CONTOUR:
         usePatches_list[idx]   = True
         linestyles_list[idx]   = None
         patchestyles_list[idx] = {'facecolor':ccontours[ntool%ncols], 'edgecolor':'none', 'lw': 1}
-      elif typ==rp.TYPE_TOOLPATH:
+      elif typ==io.TYPE_TOOLPATH:
         usePatches_list[idx]   = False
         linestyles_list[idx]   = {'linewidths':2, 'colors': ctoolpaths[ntool%ncols]}
         patchestyles_list[idx] = None
     else:
       typs = type2str(typ)
-      if typ==rp.TYPE_RAW_CONTOUR:
+      if typ==io.TYPE_RAW_CONTOUR:
         usePatches_list[idx]   = custom_formatting[typs]['usepatches']
         linestyles_list[idx]   = custom_formatting[typs]['linestyle']
         patchestyles_list[idx] = custom_formatting[typs]['patchstyle']
@@ -126,7 +126,7 @@ def show3D(contents, windowname, custom_formatting):
   args_list       = [None]*nelems
   for key in contents.records.keys():
     typ, ntool = key
-    if not typ in rp.ALL_TYPES:
+    if not typ in io.ALL_TYPES:
       raise Exception('Unrecognized path type %d' % typ)
     byz = contents.records[key]
     byzl = []
@@ -136,15 +136,15 @@ def show3D(contents, windowname, custom_formatting):
     idx                      = showlistidx(typ, ntool)
     paths_list[idx]          = byzl
     if nocustom:
-      if   typ==rp.TYPE_RAW_CONTOUR:
+      if   typ==io.TYPE_RAW_CONTOUR:
         mode_list[idx]         = 'contour'
         args_list[idx]         = {'color':    craw3d, 'line_width':2}
         #args_list[idx]         = {'colormap':cmap_raw, 'line_width':2}
-      elif typ==rp.TYPE_PROCESSED_CONTOUR:
+      elif typ==io.TYPE_PROCESSED_CONTOUR:
         mode_list[idx]         = 'line'
         args_list[idx]         = {'color':      ccontours3d[ntool%ncols],  'line_width':2}
         #args_list[idx]         = {'colormap':cmaps_contours[ntool%ncmaps], 'line_width':2}
-      elif typ==rp.TYPE_TOOLPATH:
+      elif typ==io.TYPE_TOOLPATH:
         mode_list[idx]         = 'line'
         args_list[idx]         = {'color':      ctoolpaths3d[ntool%ncols],  'line_width':2}
         #TODO: decimate the lines (maybe implement a Douglas-Peucker?) before adding the tubes!!!!!
@@ -153,7 +153,7 @@ def show3D(contents, windowname, custom_formatting):
         ##args_list[idx]         = {'colormap':cmaps_toolpaths[ntool%ncmaps], 'line_width':2}
     else:
       typs = type2str(typ)
-      if typ==rp.TYPE_RAW_CONTOUR:
+      if typ==io.TYPE_RAW_CONTOUR:
         mode_list[idx]         = custom_formatting[typs]['mode']
         args_list[idx]         = custom_formatting[typs]['args']
       else:
@@ -213,7 +213,7 @@ if __name__ == "__main__":
   else:
     custom_formatting = None
 
-  contents = rp.FileContents()
+  contents = io.FileContents()
   contents.readFromFile(filename)
   contents.organizeRecords()
   
