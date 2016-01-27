@@ -4,7 +4,9 @@ option(GENERATE_PYTHON_CALLERS "generate command line scripts to call python scr
 
 PROJECT(pyclipper)
 
-SET(CMAKE_BUILD_TYPE "Release" CACHE STRING "Release type")
+if (NOT CMAKE_BUILD_TYPE)
+  SET(CMAKE_BUILD_TYPE "Release" CACHE STRING "Release type")
+endif()
 
 set(SRC ${CMAKE_CURRENT_SOURCE_DIR})
 
