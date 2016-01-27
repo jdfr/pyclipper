@@ -63,6 +63,8 @@ def showSlicesType(planar_paths, mode=None, args={}):
     #make a list of pairs (cycle, z), composed from both contours and holes with their respective z's
     allcycles = list(it.chain.from_iterable( zip(paths, it.cycle((z,)), it.cycle((scaling,)), it.cycle((isinstance(paths, c.ClipperPaths),)))
                                              for z,paths,scaling in planar_paths))
+    if len(allcycles)==0:
+      return
     #get cycle sizes    
     cyclessizes = list(cycle.shape[0] for cycle, z, _, _ in allcycles)
     #get cumulative starting index for each cycle
