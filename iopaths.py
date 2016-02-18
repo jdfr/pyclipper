@@ -27,7 +27,7 @@ class PathsRecord:
     header = (f.readInt64(), f.readInt64(), f.readInt64(), f.readInt64(), f.readDouble(), f.readInt64(), f.readDouble())
     self.numbytes, self.headersize, self.type, self.ntool, self.z, self.savemode, self.scaling = header
     #print header
-    for ii in xrange(self.headersize-len(header)*8):
+    for ii in xrange((self.headersize-len(header)*8)/8):
       dummy   = f.readInt64()
     if   self.savemode==SAVEMODE_INT64:
       self.paths = clipper.ClipperPaths()
