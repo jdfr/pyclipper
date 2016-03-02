@@ -49,6 +49,8 @@ def showSlices(planar_paths_list, title=None, modes=None, argss=None):
   mlab.show()
 
 def showSlicesType(planar_paths, mode=None, args={}):
+  if planar_paths is None:
+    return
   if mode=='tube':
     for z, paths, scaling in planar_paths:
       applyScaling = isinstance(paths, c.ClipperPaths)
