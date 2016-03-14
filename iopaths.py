@@ -61,26 +61,35 @@ class PathsRecord:
       raise Exception('Saving 3D paths is not supported for now')
 
 class FileContents:
-  def __init__(self, numtools=None, usezradiuses=False, xradiuses=None, zradiuses=None, numpaths=None, records=None, zs=None):
-    self.numtools     = numtools
-    self.usezradiuses = usezradiuses
-    self.xradiuses    = xradiuses
-    self.zradiuses    = zradiuses
-    self.numpaths     = numpaths
-    self.records      = records
-    self.zs           = zs
+  def __init__(self):
+    self.magic        = 1213481296 #struct.unpack('I','PATH')==1213481296
+    self.version      = 0
+    self.numtools     = 0
+    self.usezradiuses = False
+    self.xradiuses    = []
+    self.zradiuses    = []
+    self.zheights     = []
+    self.zapppoints   = []
+    self.numpaths     = 0
+    self.records      = []
+    self.zs           = []
   
   def readFromFile(self, filename):
     f = clipper.File(filename, 'rb', False)
-    #get paths by z
+    self.magic        = f.readInt32()
+    self.version      = f.readInt32()
     self.numtools     = f.readInt64()
     self.usezradiuses = f.readInt64()!=0
     self.xradiuses    = [None]*self.numtools
     self.zradiuses    = [None]*self.numtools
+    self.zheights     = [None]*self.numtools
+    self.zapppoints   = [None]*self.numtools
     for idx in xrange(self.numtools):
-      self.xradiuses[idx]   = f.readDouble()
+      self.xradiuses   [idx] = f.readDouble()
       if self.usezradiuses:
-        self.zradiuses[idx] = f.readDouble()
+        self.zradiuses [idx] = f.readDouble()
+        self.zheights  [idx] = f.readDouble()
+        self.zapppoints[idx] = f.readDouble()
     
     self.numpaths     = f.readInt64()
     self.records      = [None] * self.numpaths
@@ -118,12 +127,17 @@ class FileContents:
     numpaths = int(len(self.records))
     usez     = self.usezradiuses
     f        = clipper.File(filename, 'wb', True)
+    header   = self.magic*(2**32)+self.version
+    f.writeInt32(self.magic)
+    f.writeInt32(self.version)
     f.write(self.numtools)
     f.write(self.usezradiuses)
     for idx in xrange(self.numtools):
       f.write(self.xradiuses[idx])
       if usez:
         f.write(self.zradiuses[idx])
+        f.write(self.zheights[idx])
+        f.write(self.zapppoints[idx])
     f.write(numpaths)
     for idx in xrange(numpaths):
       try:

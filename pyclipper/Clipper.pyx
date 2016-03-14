@@ -605,6 +605,16 @@ cdef class File:
     if io.fread(&v, sizeof(v),  1, self.f)!=1: raise IOError
     return v
 
+  def readInt32(self):
+    cdef cnp.int32_t v
+    if io.fread(&v, sizeof(v),  1, self.f)!=1: raise IOError
+    return v
+
+  def writeInt32(self, int v):
+    cdef cnp.int32_t v1
+    v1 = v
+    if io.fwrite(&v1, sizeof(v1), 1, self.f)!=1: raise IOError
+
   def write(self, object v):
     cdef cnp.int64_t v1
     cdef double      v2
