@@ -18,31 +18,25 @@ endif()
 
 set(OUTPUTDIR ${BASE_OUTPUTDIR}/pyclipper)
 
-#if present, include code from this file. Useful for setting some configuration values such as PYTHON_EXECUTABLE and PYTHON_EXECUTABLE_FOR_SETUP
-#Why using separate PYTHON_EXECUTABLE and PYTHON_EXECUTABLE_FOR_SETUP? Because WinPython, the python distribution we are using in windows, requires to launch a specially-configured interpreter if you are building extensions, otherwise the build process fails
-include(${SRC}/cmake.configvars.txt OPTIONAL)
+set(PYTHON_EXECUTABLE "" CACHE PATH "vanilla python executable")
+set(PYTHON_EXECUTABLE_FOR_SETUP "" CACHE PATH "python executable for use with setup.py (if using WinPython, must be \"WinPython Interpreter.exe\"")
 
-if (PYTHON_EXECUTABLE_FOR_SETUP)
-  if (IS_ABSOLUTE ${PYTHON_EXECUTABLE_FOR_SETUP})
-    if (NOT EXISTS ${PYTHON_EXECUTABLE_FOR_SETUP})
-      unset(PYTHON_EXECUTABLE_FOR_SETUP)
+if( ("${PYTHON_EXECUTABLE}" STREQUAL "") OR ("${PYTHON_EXECUTABLE_FOR_SETUP}" STREQUAL "") )
+  find_program(PYTHON_EXECUTABLE_FOUND python)
+  if(PYTHON_EXECUTABLE_FOUND)
+    if("${PYTHON_EXECUTABLE}" STREQUAL "")
+      set(PYTHON_EXECUTABLE "${PYTHON_EXECUTABLE_FOUND}")
     endif()
+    if("${PYTHON_EXECUTABLE_FOR_SETUP}" STREQUAL "")
+      set(PYTHON_EXECUTABLE_FOR_SETUP "${PYTHON_EXECUTABLE_FOUND}")
+    endif()
+  else()
+    message(FATAL_ERROR "Please set up the path to python in PYTHON_EXECUTABLE and PYTHON_EXECUTABLE_FOR_SETUP (the latter one might be different in some systems, such as WinPython)")
   endif()
-endif()
-
-if(NOT PYTHON_EXECUTABLE_FOR_SETUP)
-  if (WIN32)
-    message(WARNING "PYTHON_EXECUTABLE_FOR_SETUP variable is not set. Setting it to \"python\". If you are using a non-installed WinPython distribution, it MUST be the path to \"WinPython Interpreter.exe\", otherwise errors will follow.")
-  endif()
-  set(PYTHON_EXECUTABLE_FOR_SETUP python CACHE PATH "python executable for use with setup.py (if using WinPython, must be \"WinPython Interpreter.exe\"")
 endif()
 
 if(GENERATE_PYTHON_CALLERS)
 
-  if (NOT PYTHON_EXECUTABLE)
-    set(PYTHON_EXECUTABLE python CACHE PATH "python executable")
-  endif()
-  
   function(GENERATE_SCRIPT SCRIPT_NAME)
     if (WIN32)
       file(WRITE ${BASE_OUTPUTDIR}/${SCRIPT_NAME}.bat "\"${PYTHON_EXECUTABLE}\" pyclipper\\${SCRIPT_NAME}.py %*")
