@@ -30,7 +30,7 @@ import numpy as n
 WINDOWS       = os.name=='nt'
 standalone    = __name__ == "__main__"
 dirname       = "pyclipper"
-clipperdir    = op.join(dirname, '../../clipper/clipper')
+clipperdir    = 'clipper/clipper'
 
 description = "Python wrapper for ClipperLib library"
 

@@ -58,7 +58,16 @@ if(GENERATE_PYTHON_CALLERS)
   endif()
 endif()
 
-file(COPY ${SRC}/../clipper DESTINATION ${OUTPUTDIR}/..)
+set(CLIPPER_BASE_DIR "" CACHE PATH "tweaked clipper/iopaths base dir")
+if("${CLIPPER_BASE_DIR}" STREQUAL "")
+  if (EXISTS ${SRC}/../clipper)
+    set(CLIPPER_BASE_DIR ${SRC}/../clipper)
+  else()
+    message(FATAL_ERROR "Please set the variable CLIPPER_BASE_DIR to the base path to the clipper/iopaths directory")
+  endif()
+endif()
+
+file(COPY ${CLIPPER_BASE_DIR} DESTINATION ${OUTPUTDIR})
 
 add_custom_target(pyclipper ALL)
 
