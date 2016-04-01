@@ -32,6 +32,10 @@ standalone    = __name__ == "__main__"
 dirname       = "pyclipper"
 clipperdir    = 'clipper/clipper'
 
+if not os.path.isdir('clipper'):
+  #we assume that the clipper repository is on the parent directory
+  shutil.copytree('../clipper', 'clipper')
+
 description = "Python wrapper for ClipperLib library"
 
 if not WINDOWS and standalone:
