@@ -24,7 +24,7 @@ cmaps_contours = [
          'spring',
          ]
 
-ctoolpaths = [
+cperimeters = [
              '#ff0000', #red
              '#0000ff', #blue
              '#00ff00', #green
@@ -32,10 +32,17 @@ ctoolpaths = [
              '#ffff00', #yellow
              '#ff00ff', #magenta
               ]
+cinfillings = [col.replace('ff', '44') for col in cperimeters]
+ccontours   = [
+             '#ffaaaa', #red
+             '#aaaaff', #blue
+             '#aaffaa', #green
+             '#aaffff', #cyan
+             '#ffffaa', #yellow
+             '#ffaaff', #magenta
+              ]
 
-ccontours = [col.replace('ff', '44') for col in ctoolpaths]
-
-ctoolpaths3d = [
+cperimeters3d = [
              (1,0,0), #red
              (0,1,0), #blue
              (0,0,1), #green
@@ -43,30 +50,48 @@ ctoolpaths3d = [
              (1,1,0), #yellow
              (1,0,1), #magenta
               ]
-contour_fac = 0.4
-ccontours3d = [tuple(c*contour_fac for c in col) for col in ctoolpaths3d]
+infilling_fac = 0.25
+cinfillings3d = [tuple(c*infilling_fac for c in col) for col in cperimeters3d]
+ccontours3d   = [
+             (1,    0.66, 0.66), #red
+             (0.66, 1,    0.66), #blue
+             (0.66, 0.66, 1),    #green
+             (0.66, 1,    1),    #cyan
+             (1,    1,    0.66), #yellow
+             (1,    0.66, 1),    #magenta
+              ]
 
-ncols = len(ctoolpaths)
+ncols = len(cperimeters)
 ncmaps = len(cmaps_toolpaths)
 
 #index in the list (to be passed to showSlices) of each path type-ntool
 def showlistidx(typ, ntool):
-  return 0 if typ==io.TYPE_RAW_CONTOUR else contents.numtools*(0 if typ==io.TYPE_PROCESSED_CONTOUR else 1)+ntool+1
+  if typ==io.TYPE_RAW_CONTOUR:
+    return 0
+  else:
+    if   typ==io.TYPE_PROCESSED_CONTOUR:
+      return 1+ntool
+    elif typ==io.TYPE_TOOLPATH_PERIMETER:
+      return 1+ntool+contents.numtools
+    else: #elif typ==io.TYPE_TOOLPATH_INFILLING:
+      return 1+ntool+contents.numtools*2
 
 def type2str(typ):
   if   typ==io.TYPE_RAW_CONTOUR:
     return 'raw'
   elif typ==io.TYPE_PROCESSED_CONTOUR:
     return 'contour'
-  elif typ==io.TYPE_TOOLPATH:
-    return 'toolpath'
+  elif typ==io.TYPE_TOOLPATH_PERIMETER:
+    return 'perimeter'
+  elif typ==io.TYPE_TOOLPATH_INFILLING:
+    return 'infilling'
 
 def show2D(contents, windowname, custom_formatting):
   nocustom  = custom_formatting is None
   #generate an ordered list of lists of paths according to showlistidx.
   #The lists of paths are sorted by z, with empty places if needed,
   #so all lists have the same number of elements, and are Z-ordered
-  nelems            = contents.numtools*2+1
+  nelems            = contents.numtools*3+1
   pathsbytype_list  = [None]*nelems
   scalings_list     = [None]*nelems
   usePatches_list   = [None]*nelems
@@ -100,9 +125,13 @@ def show2D(contents, windowname, custom_formatting):
         usePatches_list[idx]   = True
         linestyles_list[idx]   = None
         patchestyles_list[idx] = {'facecolor':ccontours[ntool%ncols], 'edgecolor':'none', 'lw': 1}
-      elif typ==io.TYPE_TOOLPATH:
+      elif typ==io.TYPE_TOOLPATH_PERIMETER:
         usePatches_list[idx]   = False
-        linestyles_list[idx]   = {'linewidths':2, 'colors': ctoolpaths[ntool%ncols]}
+        linestyles_list[idx]   = {'linewidths':2, 'colors': cperimeters[ntool%ncols]}
+        patchestyles_list[idx] = None
+      elif typ==io.TYPE_TOOLPATH_INFILLING:
+        usePatches_list[idx]   = False
+        linestyles_list[idx]   = {'linewidths':2, 'colors': cinfillings[ntool%ncols]}
         patchestyles_list[idx] = None
     else:
       typs = type2str(typ)
@@ -120,7 +149,7 @@ def show2D(contents, windowname, custom_formatting):
 
 def show3D(contents, windowname, custom_formatting):
   nocustom  = custom_formatting is None
-  nelems          = contents.numtools*2+1
+  nelems          = contents.numtools*3+1
   paths_list      = [None]*nelems
   mode_list       = [None]*nelems
   args_list       = [None]*nelems
@@ -144,12 +173,19 @@ def show3D(contents, windowname, custom_formatting):
         mode_list[idx]         = 'line'
         args_list[idx]         = {'color':      ccontours3d[ntool%ncols],  'line_width':2}
         #args_list[idx]         = {'colormap':cmaps_contours[ntool%ncmaps], 'line_width':2}
-      elif typ==io.TYPE_TOOLPATH:
+      elif typ==io.TYPE_TOOLPATH_PERIMETER:
         mode_list[idx]         = 'line'
-        args_list[idx]         = {'color':      ctoolpaths3d[ntool%ncols],  'line_width':2}
+        args_list[idx]         = {'color':      cperimeters3d[ntool%ncols],  'line_width':2}
         #TODO: decimate the lines (maybe implement a Douglas-Peucker?) before adding the tubes!!!!!
         #mode_list[idx]         = 'tube'
-        #args_list[idx]         = {'color':      ctoolpaths3d[ntool%ncols],  'line_width':2, 'tube_radius':contents.xradiuses[ntool]}
+        #args_list[idx]         = {'color':      cperimeters3d[ntool%ncols],  'line_width':2, 'tube_radius':contents.xradiuses[ntool]}
+        ##args_list[idx]         = {'colormap':cmaps_toolpaths[ntool%ncmaps], 'line_width':2}
+      elif typ==io.TYPE_TOOLPATH_INFILLING:
+        mode_list[idx]         = 'line'
+        args_list[idx]         = {'color':      cinfillings3d[ntool%ncols],  'line_width':2}
+        #TODO: decimate the lines (maybe implement a Douglas-Peucker?) before adding the tubes!!!!!
+        #mode_list[idx]         = 'tube'
+        #args_list[idx]         = {'color':      cinfillings3d[ntool%ncols],  'line_width':2, 'tube_radius':contents.xradiuses[ntool]}
         ##args_list[idx]         = {'colormap':cmaps_toolpaths[ntool%ncmaps], 'line_width':2}
     else:
       typs = type2str(typ)
