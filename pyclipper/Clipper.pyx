@@ -428,7 +428,8 @@ cdef class ClipperPaths:
       np = self.thisptr[0][k].size()
       IF DEBUG:   writeDebug("  WRITING PATH %d with %d points\n" % (k, np))
       if   io.fwrite(&np,       sizeof(size_t), 1, f)!=1: raise IOError
-      for i in range(np):
+    for k in range(numpaths):
+      for i in range(self.thisptr[0][k].size()):
         p = &self.thisptr[0][k][i]
         if io.fwrite(&p[0].X,   sizeof(c.cInt), 1, f)!=1: raise IOError
         if io.fwrite(&p[0].Y,   sizeof(c.cInt), 1, f)!=1: raise IOError
@@ -447,7 +448,8 @@ cdef class ClipperPaths:
       if   io.fread(&np,       sizeof(size_t), 1, f)!=1: raise IOError
       IF DEBUG:   writeDebug("      IN PATH %d, numpoints: %d\n" % (k, np))
       self.thisptr[0][k].resize(np)
-      for i in range(np):
+    for k in range(oldsize, oldsize+numpaths):
+      for i in range(self.thisptr[0][k].size()):
         p = &self.thisptr[0][k][i]
         if io.fread(&p[0].X,   sizeof(c.cInt), 1, f)!=1: raise IOError
         if io.fread(&p[0].Y,   sizeof(c.cInt), 1, f)!=1: raise IOError
