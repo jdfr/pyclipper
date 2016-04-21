@@ -1,16 +1,6 @@
 # pyclipper
 
-pyclipper is an experimental python binding for Angus Johnson's excellent [ClipperLib](http://www.angusj.com/delphi/clipper.php) library.
-
-## Rationale
-
-Computationally expensive tasks such as clipping and offseting have to be done in a low level language. Numpy, numba and scipy.weave can help, but many geometrical algorithms cannot be vectorized easily, and you just have to use a language closer to the metal, such as C. You should use each tool for the task it does the best: C/C++ for number-crunching, Python for glue logic. Solutions written in pure python are slow, probably even when executed with Pypy.
-
-## Current state
-
-`ClipperXXX` objects encapsulate ClipperLib objects: `ClipperPaths` and `ClipperPolyTree` wrap `ClipperLib:Paths` and `ClipperLib::PolyTree`, respectively, which are the main data types of ClipperLib. `ClipperClip` and `ClipperOffset` encapsulate the clipping and offseting engines, respectively.
-
-Most operations on these objects are also wrapped. Additionally, it is possible to show `ClipperPaths` using matplotlib or mayavi, and read/write files containing `ClipperPaths` objects. The contours in these objects are exposed using custom accesors: the contours are casted as numpy matrices representing lists of points. `ClipperPaths` objects can be created from lists of numpy matrices containing lists of int64 coordinates, to enable the use of Python to do scripting on these objects. 
+This version of pyclipper is a very incomplete python binding for Angus Johnson's excellent [ClipperLib](http://www.angusj.com/delphi/clipper.php) library. It only wraps the interface types, not the core functionality of the library. It is prepared to read from a file (or from stdin) a binary stream representing a series of ClipperLib::Paths with several different attributes at different Z levels. It can plot these paths in 2D and in 3D. It contains miscellaneous related functionality.
 
 ## Dependencies
 
