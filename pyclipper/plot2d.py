@@ -43,6 +43,8 @@ def showOpenClipperPaths(paths, scalingFactor=0.00000001, fig=None, ax=None, sho
   if show:
     plt.show()"""
   for i, path in enumerate(paths):
+    if len(path)==0:
+      continue
     if path[0].dtype==n.int64:
       pathseq = [p*scalingFactor for p in path]
     else:
@@ -167,6 +169,7 @@ def getBoundingBox(obj, scalingFactor=0.00000001):
   #  return obj.getBoundingBox()
   if obj is None: return (n.inf, -n.inf, n.inf, -n.inf)
   if   isinstance(obj, n.ndarray):
+    if len(obj)==0: return (n.inf, -n.inf, n.inf, -n.inf)
     minx, miny = obj.min(axis=0)
     maxx, maxy = obj.max(axis=0)
     return (minx, maxx, miny, maxy)
