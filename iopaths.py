@@ -64,7 +64,7 @@ class PathsRecord:
 class FileContents:
   def __init__(self):
     self.magic        = 1213481296 #struct.unpack('I','PATH')==1213481296
-    self.version      = 0
+    self.version      = 1
     self.numtools     = 0
     self.usezradiuses = False
     self.xradiuses    = []
@@ -72,6 +72,7 @@ class FileContents:
     self.zheights     = []
     self.zapppoints   = []
     self.numpaths     = 0
+    self.additional   = []
     self.records      = []
     self.zs           = []
   
@@ -91,7 +92,12 @@ class FileContents:
         self.zradiuses [idx] = f.readDouble()
         self.zheights  [idx] = f.readDouble()
         self.zapppoints[idx] = f.readDouble()
-    
+    if self.version>0:
+      numadd = f.readInt64()
+      if numadd>0:
+        self.additional = [None] * numadd
+        for i in xrange(numadd):
+          self.additional[i] = f.readInt64()
     self.numpaths     = f.readInt64()
     self.records      = [None] * self.numpaths
     allzs            = set()
@@ -139,6 +145,12 @@ class FileContents:
         f.write(self.zradiuses[idx])
         f.write(self.zheights[idx])
         f.write(self.zapppoints[idx])
+    if (self.version>0):
+        l = len(self.additional)
+        f.write(l)
+        if l>0:
+          for a in self.additional:
+            f.write(a)
     f.write(numpaths)
     for idx in xrange(numpaths):
       try:
