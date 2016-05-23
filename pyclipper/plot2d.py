@@ -395,6 +395,16 @@ def showSlices(data, modeN=False, fig=None, ax=None, title=None, initindex=0, BB
     elif key == 'up'    and index[0]<l:
       index[0]  += 1
       paint()
+    elif key == 'a':
+      newindex = index[0] + int(l*0.1)
+      if newindex<leng:
+        index[0] = newindex
+        paint()
+    elif key == 'z':
+      newindex = index[0] - int(l*0.1)
+      if newindex>=0:
+        index[0] = newindex
+        paint()
   
   #finish setup  
   if handleEvents:  
