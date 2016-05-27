@@ -232,6 +232,7 @@ cdef class ClipperDPaths:
       if   io.fread(&np,       sizeof(size_t), 1, f)!=1: raise IOError
       IF DEBUG:   writeDebug("      IN PATH %d, numpoints: %d\n" % (k, np))
       self.thisptr[0][k].resize(np)
+    for k in range(oldsize, oldsize+numpaths):
       for i in range(np):
         p = &self.thisptr[0][k][i]
         if io.fread(&p[0].X,   sizeof(double), 1, f)!=1: raise IOError
