@@ -13,5 +13,5 @@
 # License along with this file. You may obtain a copy of the License at
 # http://www.gnu.org/licenses/agpl-3.0.txt
 
-from pyslic3r.plot2d import *
-from pyslic3r.plot3d import *
+from pyclipper.plot2d import *
+from pyclipper.plot3d import *
