@@ -18,6 +18,7 @@ import itertools              as it
 import numpy                  as n
 
 from   . import Clipper       as c
+from   . import minisix       as six
 
 import matplotlib.pyplot      as plt
 from   matplotlib.path    import Path
@@ -110,7 +111,7 @@ def object2DToPatches(obj, scalingFactor=0.00000001, sliceindex=None, linestyle=
       raise Exception('if sliceindex is None and obj is indexable, all elements in obj must be arrays')
   elif hasattr(obj, 'next'):
     ss = scalingFactor if hasattr(obj, '__getitem__') else it.cycle([scalingFactor])
-    return it.chain(object2DToPatches(x, scalingFactor=s, linestyle=linestyle, patchArgs=patchArgs) for x, s in it.izip(obj, ss))
+    return it.chain(object2DToPatches(x, scalingFactor=s, linestyle=linestyle, patchArgs=patchArgs) for x, s in six.izip(obj, ss))
   else:
     raise Exception('Cannot convert this object type to patches: '+str(type(obj)))
     
@@ -138,7 +139,7 @@ def object2Lines(obj, scalingFactor=0.00000001, sliceindex=None, linestyle=None)
       raise Exception('if sliceindex is None and obj is indexable, all elements in obj must be arrays')
   elif hasattr(obj, 'next'):
     ss = scalingFactor if hasattr(obj, '__getitem__') else it.cycle([scalingFactor])
-    return it.chain(object2Lines(x, linestyle=linestyle, scalingFactor=s) for x, s in izip(obj, ss))
+    return it.chain(object2Lines(x, linestyle=linestyle, scalingFactor=s) for x, s in six.izip(obj, ss))
   else:
     raise Exception('Cannot convert this object type to lines: '+str(type(obj)))
   if linestyle is None:
@@ -265,7 +266,7 @@ def show2DObjectN(objs, scalingFactor=None, sliceindexes=None, ax=None, usePatch
     ax  = fig.add_subplot(111, aspect='equal')
   allpatches = [None]*len(objs)
   
-  for idx, (obj, sliceIndex, linestyle, patchArgs, usePatches, ss), in enumerate(it.izip(objs, it.cycle(sliceindexes), it.cycle(linestyles), it.cycle(patchArgss), it.cycle(usePatchess), scalingFactor)):
+  for idx, (obj, sliceIndex, linestyle, patchArgs, usePatches, ss), in enumerate(six.izip(objs, it.cycle(sliceindexes), it.cycle(linestyles), it.cycle(patchArgss), it.cycle(usePatchess), scalingFactor)):
     ps = show2DObject(obj, scalingFactor=ss, sliceindex=sliceIndex, ax=ax, linestyle=linestyle, patchArgs=patchArgs, show=False, usePatches=usePatches, returnpatches=returnpatches)
     if returnpatches:
       allpatches[idx] = ps

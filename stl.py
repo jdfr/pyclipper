@@ -223,7 +223,8 @@ class StlMesh(Mesh):
         if mode in (AUTOMATIC, ASCII) and header.startswith('solid'):
             try:
                 data = self._load_ascii(fh, header)
-            except RuntimeError, (recoverable, e):
+            except RuntimeError as exception:
+                (recoverable, e) = exception.args
                 if recoverable:  # Recoverable?
                     data = self._load_binary(fh, header, check_size=False)
                 else:
@@ -322,7 +323,7 @@ class StlMesh(Mesh):
                 assert get() == 'endfacet'
                 attrs = 0
                 yield (normals, (v0, v1, v2), attrs)
-            except AssertionError, e:
+            except AssertionError as e:
                 raise RuntimeError(recoverable[0], e)
 
     def _load_ascii(self, fh, header):
@@ -386,7 +387,7 @@ class StlMesh(Mesh):
             '1.3.3',
             datetime.datetime.now(),
             name,
-        ))[:80].ljust(80, ' '))
+        )).encode('latin-1')[:80].ljust(80, b' '))
         fh.write(struct.pack('@i', self.data.size))
         self.data.tofile(fh)
 

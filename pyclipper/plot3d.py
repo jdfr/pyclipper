@@ -28,6 +28,7 @@
 #dark2        greys         prism    set1
 
 from . import Clipper as c
+from . import minisix as six
 
 import itertools as it
 
@@ -44,7 +45,7 @@ def showSlices(planar_paths_list, title=None, modes=None, argss=None):
   if title:
     figargs['figure'] = title
   mlab.figure(**figargs)
-  for (planar_paths, mode, args) in it.izip(planar_paths_list, it.cycle(modes), it.cycle(argss)):
+  for (planar_paths, mode, args) in six.izip(planar_paths_list, it.cycle(modes), it.cycle(argss)):
     showSlicesType(planar_paths, mode=mode, args=args)
   mlab.show()
 
@@ -80,7 +81,7 @@ def showSlicesType(planar_paths, mode=None, args={}):
     cyclesz  = n.empty((cyclesx.shape[0],))
     conns  = n.empty((cyclesx.shape[0],2))
     #iterate over each cycle's starting index, size, and z
-    for startidx, size, (cycle,z,scaling,applyScalingFactor) in it.izip(cyclestartidxs, cyclessizes, allcycles):
+    for startidx, size, (cycle,z,scaling,applyScalingFactor) in six.izip(cyclestartidxs, cyclessizes, allcycles):
       endidx = startidx+size
       if applyScalingFactor:
         cyclesx[startidx:endidx] = cycle[:,0]*scaling       #set x for the current cycle

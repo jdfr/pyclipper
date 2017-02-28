@@ -1,5 +1,6 @@
 import pyclipper.plot2d as p2
 import pyclipper.Clipper as c
+from   pyclipper.minisix import *
 import itertools as it
 import sys
 import time

@@ -538,10 +538,11 @@ cdef class File:
     """open a FILE* object"""
     cdef fileno
     self.iswrite   = write
+    bmode          =   mode.encode('latin-1')
     if   isinstance(stream, basestring):
+      bstream      = stream.encode('latin-1')
       self.doclose = True
-      #CANNOT PORT DIRECTLY TO PYTHON 3: THIS STATEMET PRODUCES A SEGFAULT OR SOMETHING LIKE THAT IN WINPYTHON 3.4, BUT WORKS ON WINPYTHON 2.7.9
-      self.f       = io.fopen(stream, mode)
+      self.f       = io.fopen(bstream, bmode)
       #if self.f==NULL:
       #  raise Exception("Could not open file "+stream)
     elif stream is None:
@@ -551,11 +552,11 @@ cdef class File:
       else:
         stream     = sys.stdin  #f = io.stdin
       if PY3:
-        stream = stream.buffer #python 3 ready
+        stream     = stream.buffer #python 3 ready
       fileno       = stream.fileno()
       if Windows:
         msvcrt.setmode(fileno, os.O_BINARY)
-      self.f       = io.fdopen(fileno, mode)
+      self.f       = io.fdopen(fileno, bmode)
       #if self.f==NULL:
       #  if write: raise Exception('Could not reopen stdout')
       #  else:     raise Exception('Could not reopen stdin')

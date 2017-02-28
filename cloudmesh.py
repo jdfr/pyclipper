@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import numpy as n
 #from scipy.interpolate import SmoothBivariateSpline
 from scipy.spatial import Delaunay
@@ -10,16 +12,16 @@ from cmdutils import readStringParam, readFloatParam
 RetVal = namedtuple('RetVal', ['ok', 'val'])
 
 def usage():
-  print "arguments: CLOUDFILEIN SEPARATOR ZMIN ZMAX ZSUB STLFILEOUT"
-  print "           CLOUDFILEIN: point cloud input file (will be interpreted as a heightmap)"
-  print "           SEPARATOR: the separator used in CLOUDFILEIN. It can be any character."
-  print "                      Use quotes if the character is a space or it is interpreted"
-  print "                      by the command line interpreter (ex: \" \", or \";\")"
-  print "           ZMIN, ZMAX: points from the point cloud will be removed if they are"
-  print "                       outside the open range (ZMIN, ZMAX)"
-  print "           ZSUB: The output file will be based on the points from the point cloud"
-  print "                 plus a base of thickness ZSUB"
-  print "           STLFILEOUT: STL output file"
+  print("arguments: CLOUDFILEIN SEPARATOR ZMIN ZMAX ZSUB STLFILEOUT")
+  print("           CLOUDFILEIN: point cloud input file (will be interpreted as a heightmap)")
+  print("           SEPARATOR: the separator used in CLOUDFILEIN. It can be any character.")
+  print("                      Use quotes if the character is a space or it is interpreted")
+  print("                      by the command line interpreter (ex: \" \", or \";\")")
+  print("           ZMIN, ZMAX: points from the point cloud will be removed if they are")
+  print("                       outside the open range (ZMIN, ZMAX)")
+  print("           ZSUB: The output file will be based on the points from the point cloud")
+  print("                 plus a base of thickness ZSUB")
+  print("           STLFILEOUT: STL output file")
   sys.exit(-1)
 
 def main(argv):
@@ -28,7 +30,7 @@ def main(argv):
   inputfile,  argidx = readStringParam(argv, argidx, usage, "NO ARGUMENTS!\n")
   separator,  argidx = readStringParam(argv, argidx, usage, "NO SEPARATOR!\n")
   if len(separator)!=1:
-    print "SEPARATOR MUST BE A SINGLE CHARACTER!\n"
+    print("SEPARATOR MUST BE A SINGLE CHARACTER!\n")
     usage()
   zmin,       argidx =  readFloatParam(argv, argidx, usage, "ZMIN")
   zmax,       argidx =  readFloatParam(argv, argidx, usage, "ZMAX")
@@ -38,15 +40,15 @@ def main(argv):
   try:
     cloud = n.loadtxt(inputfile, delimiter=separator)
   except:
-    print "Could not open file <%s> as a XYZ point cloud with delimiter <%s>" % (inputfile, separator)
+    print("Could not open file <%s> as a XYZ point cloud with delimiter <%s>" % (inputfile, separator))
     sys.exit(-1)
   
   if len(cloud.shape)!=2:
-    print "file %s does not contain a XYZ point cloud"
+    print("file %s does not contain a XYZ point cloud")
     sys.exit(-1)
   
   if cloud.shape[1]<3:
-    print "file %s does not contain a XYZ point cloud (only %d coordinates)" % cloud.shape[1]
+    print("file %s does not contain a XYZ point cloud (only %d coordinates)" % cloud.shape[1])
     sys.exit(-1)
   
   if cloud.shape[1]>3:
@@ -58,14 +60,14 @@ def main(argv):
     result = createMeshFromPointCloud(cloud, zsub)
     invertfaces = True
   except:
-    print "Unexpected exception:"
+    print("Unexpected exception:")
     traceback.print_exc()
     sys.exit(-1)
   
   del cloud
   
   if not result.ok:
-    print result.val
+    print(result.val)
     sys.exit(-1)
   
   points, faces = result.val
@@ -77,7 +79,7 @@ def main(argv):
     
     stlobj.save(outputfile, mode=stl.BINARY, update_normals=False)
   except:
-    print "Unexpected exception:"
+    print("Unexpected exception:")
     traceback.print_exc()
     sys.exit(-1)
   
