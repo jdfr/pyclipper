@@ -1,10 +1,12 @@
 #this is python-stl v1.3.3, slightly modified
+from __future__ import print_function
 
 import os
 import numpy
 import struct
 import datetime
 import collections
+import itertools
 
 #__package_name__ = 'numpy-stl'
 #__import_name__ = 'stl'
@@ -220,7 +222,7 @@ class StlMesh(Mesh):
         :param int mode: Automatically detect the filetype or force binary
         '''
         header = fh.read(HEADER_SIZE).lower()
-        if mode in (AUTOMATIC, ASCII) and header.startswith('solid'):
+        if mode in (AUTOMATIC, ASCII) and header.startswith(b'solid'):
             try:
                 data = self._load_ascii(fh, header)
             except RuntimeError as exception:
@@ -367,19 +369,20 @@ class StlMesh(Mesh):
             pass
 
     def _write_ascii(self, fh, name):
-        print >>fh, 'solid %s' % name
+        fh.write(('solid %s\n' % name).encode('latin-1'))
 
         for row in self.data:
             vectors = row['vectors']
-            print >>fh, 'facet normal %f %f %f' % tuple(row['normals'])
-            print >>fh, '  outer loop'
-            print >>fh, '    vertex %f %f %f' % tuple(vectors[0])
-            print >>fh, '    vertex %f %f %f' % tuple(vectors[1])
-            print >>fh, '    vertex %f %f %f' % tuple(vectors[2])
-            print >>fh, '  endloop'
-            print >>fh, 'endfacet'
+            fh.write(("""facet normal %f %f %f
+  outer loop
+    vertex %f %f %f
+    vertex %f %f %f
+    vertex %f %f %f
+  endloop
+endfacet
+""" % tuple(itertools.chain(row['normals'], vectors[0], vectors[1], vectors[2]))).encode('latin-1'))
 
-        print >>fh, 'endsolid %s' % name
+        fh.write(('endsolid %s\n' % name).encode('latin-1'))
 
     def _write_binary(self, fh, name):
         fh.write(('%s (%s) %s %s' % (
