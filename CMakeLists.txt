@@ -84,7 +84,6 @@ add_custom_target(pyclipper ALL
                   COMMAND ${PYTHON_EXECUTABLE_FOR_SETUP} setup.py build_ext --inplace
                   COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/stl.py                     stl.py
                   COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/cmdutils.py                cmdutils.py
-                  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/twoscales.py               twoscales.py
                   COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/cloudmesh.py               cloudmesh.py
                   COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/iopaths.py                 iopaths.py
                   COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/contourViewer.py           contourViewer.py
