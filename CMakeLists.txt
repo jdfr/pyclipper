@@ -73,28 +73,26 @@ endif()
 
 file(COPY ${CLIPPER_BASE_DIR} DESTINATION ${OUTPUTDIR})
 
-add_custom_target(pyclipper ALL)
-
 #up to the invocation of PYTHON_EXECUTABLE_FOR_SETUP, the order is important!!!!
-add_custom_command(TARGET pyclipper
-                   COMMAND ${CMAKE_COMMAND} -E make_directory ${OUTPUTDIR}
-                   COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/setup.py                   setup.py
-                   COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/pyclipper/__init__.py      pyclipper/__init__.py
-                   COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/pyclipper/Clipper.pyx      pyclipper/Clipper.pyx
-                   COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/pyclipper/Clipper.pxd      pyclipper/Clipper.pxd
-                   COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/pyclipper/Clipper_defs.pxd pyclipper/Clipper_defs.pxd
-                   COMMAND ${PYTHON_EXECUTABLE_FOR_SETUP} setup.py build_ext --inplace
-                   COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/stl.py                     stl.py
-                   COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/cmdutils.py                cmdutils.py
-                   COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/twoscales.py               twoscales.py
-                   COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/cloudmesh.py               cloudmesh.py
-                   COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/iopaths.py                 iopaths.py
-                   COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/contourViewer.py           contourViewer.py
-                   COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/slicesViewer.py            slicesViewer.py
-                   COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/pyclipper/all.py           pyclipper/all.py
-                   COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/pyclipper/minisix.py       pyclipper/minisix.py
-                   COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/pyclipper/plot.py          pyclipper/plot.py
-                   COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/pyclipper/plot2d.py        pyclipper/plot2d.py
-                   COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/pyclipper/plot3d.py        pyclipper/plot3d.py
-                   WORKING_DIRECTORY ${OUTPUTDIR} VERBATIM)
+add_custom_target(pyclipper ALL
+                  COMMAND ${CMAKE_COMMAND} -E make_directory ${OUTPUTDIR}
+                  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/setup.py                   setup.py
+                  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/pyclipper/__init__.py      pyclipper/__init__.py
+                  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/pyclipper/Clipper.pyx      pyclipper/Clipper.pyx
+                  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/pyclipper/Clipper.pxd      pyclipper/Clipper.pxd
+                  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/pyclipper/Clipper_defs.pxd pyclipper/Clipper_defs.pxd
+                  COMMAND ${PYTHON_EXECUTABLE_FOR_SETUP} setup.py build_ext --inplace
+                  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/stl.py                     stl.py
+                  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/cmdutils.py                cmdutils.py
+                  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/twoscales.py               twoscales.py
+                  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/cloudmesh.py               cloudmesh.py
+                  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/iopaths.py                 iopaths.py
+                  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/contourViewer.py           contourViewer.py
+                  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/slicesViewer.py            slicesViewer.py
+                  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/pyclipper/all.py           pyclipper/all.py
+                  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/pyclipper/minisix.py       pyclipper/minisix.py
+                  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/pyclipper/plot.py          pyclipper/plot.py
+                  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/pyclipper/plot2d.py        pyclipper/plot2d.py
+                  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SRC}/pyclipper/plot3d.py        pyclipper/plot3d.py
+                  WORKING_DIRECTORY ${OUTPUTDIR} VERBATIM)
 
