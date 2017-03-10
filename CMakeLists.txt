@@ -1,12 +1,10 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 2.8.0)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.0) #maybe it actually requires higher, but at most 3.5...
 
-option(GENERATE_PYTHON_CALLERS "generate command line scripts to call python scripts" OFF)
+include(config.cmake)
 
 PROJECT(pyclipper)
 
-if (NOT CMAKE_BUILD_TYPE)
-  SET(CMAKE_BUILD_TYPE "Release" CACHE STRING "Release type")
-endif()
+SET(CMAKE_BUILD_TYPE "Release" CACHE STRING "Release type")
 
 set(SRC ${CMAKE_CURRENT_SOURCE_DIR})
 
@@ -17,9 +15,6 @@ else()
 endif()
 
 set(OUTPUTDIR ${BASE_OUTPUTDIR}/pyclipper)
-
-set(PYTHON_EXECUTABLE "" CACHE PATH "vanilla python executable")
-set(PYTHON_EXECUTABLE_FOR_SETUP "" CACHE PATH "python executable for use with setup.py (if using WinPython, must be \"WinPython Interpreter.exe\"")
 
 if( ("${PYTHON_EXECUTABLE}" STREQUAL "") OR ("${PYTHON_EXECUTABLE_FOR_SETUP}" STREQUAL "") )
   find_program(PYTHON_EXECUTABLE_FOUND python)
@@ -68,7 +63,6 @@ if(GENERATE_PYTHON_CALLERS)
   endif()
 endif()
 
-set(CLIPPER_BASE_DIR "" CACHE PATH "tweaked clipper/iopaths base dir")
 if("${CLIPPER_BASE_DIR}" STREQUAL "")
   if (EXISTS ${SRC}/../clipper)
     set(CLIPPER_BASE_DIR ${SRC}/../clipper)
