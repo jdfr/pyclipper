@@ -81,13 +81,19 @@ class Mesh(collections.Mapping):
         ('attr', 'u2', (1, )),
     ])
 
-    def __init__(self, data, calculate_normals=True, remove_empty_areas=True):
+    def __init__(self, data, calculate_normals=True, remove_empty_areas=True, unpack_data=True):
         super(Mesh, self).__init__()
         if remove_empty_areas:
             data = self.remove_empty_areas(data)
 
         self.data = data
+        if unpack_data:
+            self.unpackdata()
 
+            if calculate_normals:
+                self.update_normals()
+    
+    def unpackdata():
         points = self.points = data['vectors']
         self.points.shape = data.size, 9
         self.x = points[:, X::3]
@@ -99,10 +105,7 @@ class Mesh(collections.Mapping):
         self.normals = data['normals']
         self.vectors = data['vectors']
         self.attr = data['attr']
-
-        if calculate_normals:
-            self.update_normals()
-
+    
     @classmethod
     def remove_empty_areas(cls, data):
         vectors = data['vectors']
