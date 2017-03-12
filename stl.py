@@ -366,8 +366,8 @@ class StlMesh(Mesh):
             if fh:
                 write(fh, name)
             else:
-                with open(name, 'wb') as fh:
-                    write(fh, filename)
+                with open(filename, 'wb') as fh:
+                    write(fh, name)
         except IOError:  # pragma: no cover
             pass
 
