@@ -150,7 +150,7 @@ def object2Lines(obj, scalingFactor=0.00000001, sliceindex=None, linestyle=None)
 def contours2path(contours, scalingFactor=0.00000001):
   """helper function for object2DToPatches()"""
   contours        = [n.vstack((c, c[0,:])) for c in contours] #close the contours
-  sizes           = n.array([x.shape[0] for x in contours])
+  sizes           = n.array([x.shape[0] for x in contours], dtype=int)
   accums          = n.cumsum(sizes[:-1])
   if len(contours)==0:
     vertices      = n.empty((0,2))
