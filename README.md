@@ -1,6 +1,6 @@
 # pyclipper
 
-This version of pyclipper is a very incomplete python binding for Angus Johnson's excellent [ClipperLib](http://www.angusj.com/delphi/clipper.php) library. It only wraps the interface types, not the core functionality of the library. It is prepared to read from a file (or from stdin) a binary stream representing a series of ClipperLib::Paths with several different attributes at different Z levels. It can plot these paths in 2D and in 3D. It contains miscellaneous related functionality.
+This project was originally a set of python bindings for Angus Johnson's excellent [ClipperLib](http://www.angusj.com/delphi/clipper.php) library. However, with time, these bindings became mostly sidelined, and now they are vestigial. Instead, this project has specialized in reading toolpaths and contours from stdin or files. These paths are raw ClipperLib::Paths, with some metadata attached. It can plot these paths in 2D and in 3D. It contains miscellaneous related functionality.
 
 ## Dependencies
 
@@ -14,7 +14,7 @@ From the python ecosystem, pyclipper has the following dependencies:
 * Matplotlib 1.4.2 (optional, for 2D plotting)
 * Mayavi 4.3.1 (optional, for 3D plotting)
 
-Please note that the project will probably compile with other versions of the dependencies, the numbers are just the versions used in development. It has been tested only on CPython.
+Please note that the project will probably compile with other versions of the dependencies, the numbers are just the versions used in development. It has been tested only on CPython +2.7 and +3.4, both in Linux and Windows.
 
 ## How to compile
 
