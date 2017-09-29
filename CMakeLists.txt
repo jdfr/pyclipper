@@ -2,7 +2,7 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.0) #maybe it actually requires higher, but at m
 
 include(config.cmake)
 
-PROJECT(pyclipper)
+PROJECT(pyclipper LANGUAGES) #no compiled language, skip usual compiler  tests
 
 SET(CMAKE_BUILD_TYPE "Release" CACHE STRING "Release type")
 
