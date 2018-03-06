@@ -25,3 +25,7 @@ python setup.py build_ext --inplace
 ```
 
 Alternatively, you can use the provided cmake script to copy the source files to another location and build the Cython extension there. The cmake script is also aware of the complexities of building if you are using a portable version of WinPython, for which the build process is not as straightforward as it is in other distributions.
+
+## License
+
+This project is released under the AGPLv3.
